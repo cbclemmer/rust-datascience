@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use std::collections::HashMap;
 
-pub type InputTup<'a> = (&'a str, &'a str);
+pub type InputTup = (String, String);
 pub type WordBag = HashMap<String, f32>;
 pub type BagMap = HashMap<String, WordBag>;
 
@@ -9,16 +9,25 @@ pub struct BagOfWords {
     bags: BagMap
 }
 
+
+
 impl BagOfWords {
-    fn train_word_vector<'a>(input_data: Vec<&str>) -> WordBag {
-        let words = input_data.iter()
+    fn train_word_vector<'a>(input_data: Vec<String>) -> WordBag {
+        let word_group = input_data.iter()
             .flat_map(|s| s.split(" "))
             .sorted()
-            .group_by(|s| s.clone());
+            .group_by(|s| String::from(s.to_owned()));
+
+        let words = word_group
+            .into_iter()
+            .map(|(wd, grp)| (wd, grp.count()))
+            .collect_vec();
         
         let mut hm = WordBag::new();
-        for (wd, grp) in &words {
-            let prob = grp.count() as f32 / words.into_iter().count() as f32;
+        let input_length = input_data.len();
+        for (wd, count) in words.clone() {
+            if wd.eq("") {continue;}
+            let prob = count as f32 / input_length as f32;
             hm.insert(String::from(wd), prob);
         }
         hm
@@ -27,12 +36,12 @@ impl BagOfWords {
     pub fn new(input_data: &Vec<InputTup>) -> BagOfWords {
         let input_groups = input_data.iter()
             .filter(|tup| tup.0 != "")
-            .sorted_by(|tup1, tup2| tup1.0.cmp(tup2.0))
-            .group_by(|&tup| tup.0);
+            .sorted_by(|tup1, tup2| tup1.0.cmp(&tup2.0))
+            .group_by(|&tup| tup.0.to_owned());
         
         let mut hm = BagMap::new();
         for (key, group) in &input_groups {
-            let wv_input = group.map(|tup| tup.1).collect_vec();
+            let wv_input = group.map(|tup| tup.1.to_owned()).collect_vec();
             let wv = BagOfWords::train_word_vector(wv_input);
             hm.insert(String::from(key), wv);
         }
@@ -60,15 +69,17 @@ impl BagOfWords {
         let mut totals_hm: HashMap<String, i32> = HashMap::new();
         for wd in sentence.split(" ") {
             let best_bag = self.test_word(String::from(wd));
+            if best_bag.eq("") { continue; }
             let m_total = totals_hm.get(&best_bag);
             let total: i32 = if m_total.is_none() { 1 } else { m_total.expect("") + 1 };
             totals_hm.insert(best_bag, total);
         }
 
         let mut best_bag = (String::from(""), 0);
-        for total in totals_hm.into_iter() {
-            if total.1 > best_bag.1 {
-                best_bag = total
+        for (bag_name, total) in totals_hm.into_iter() {
+            // println!("{}: {}", bag_name, total);
+            if total > best_bag.1 {
+                best_bag = (bag_name, total)
             }
         }
 

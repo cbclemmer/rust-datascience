@@ -5,4 +5,10 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+name="bag_of_words"
+path="src/bag_of_words.rs"
+
 [dependencies]
+csv = "1.1.6"
+itertools = "0.10.5"

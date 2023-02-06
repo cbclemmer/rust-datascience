@@ -2,6 +2,8 @@ use std::ops::Index;
 use csv::Reader;
 use itertools::Itertools;
 use std::fs;
+use std::thread;
+use std::sync::mpsc;
 
 use bag_of_words::BagOfWords;
 use bag_of_words::InputTup;
@@ -66,10 +68,14 @@ fn main() {
     let num_validation_tweets = validation_data.len();
     let mut num_correct = 0;
     let mut num_iterated = 0;
+    let (tx, rx) = mpsc::channel::<bool>();
     for (tweet_type, tweet) in validation_data {
-        if bow.test_sentence(tweet) == tweet_type {
-            num_correct += 1;
-        }
+        let bow_clone = bow.bags.clone();
+        thread::spawn(move || {
+            if BagOfWords::test_sentence(bow_clone, tweet) == tweet_type {
+                num_correct += 1;
+            }
+        });
         num_iterated += 1;
         let result: f32 = f32::ceil(num_correct as f32 / num_iterated as f32 * 100.0);
         let per_complete = f32::ceil(num_iterated as f32 / num_validation_tweets as f32 * 100.0);

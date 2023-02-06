@@ -46,13 +46,16 @@ fn get_input_data(file_path: String) -> Vec<InputTup> {
 
     let mut rdr = Reader::from_reader(file_contents.as_bytes());
 
+    let mut num_records = 0;
     for result in rdr.records() {
         let r = result.ok().expect("Error parsing record");
+        num_records += 1;
         let sentiment = String::from(r.index(2));
         let tweet = String::from(r.index(3));
         let pair = (sentiment, clean_words(tweet, blacklist_words.clone()));
         training_data.push(pair);
     }
+    println!("{} csv records", num_records);
     training_data
 }
 
@@ -65,16 +68,31 @@ fn main() {
     println!("Getting validation data");
     let validation_data = get_input_data(String::from("data/twitter_validation.csv"));
 
+    let (tx, rx) = mpsc::channel::<i32>();
+
+    let num_threads = 16;
     let num_validation_tweets = validation_data.len();
-    let (tx, rx) = mpsc::channel::<bool>();
+    let num_in_chunk = f32::ceil(num_validation_tweets as f32 / num_threads as f32) as i32;
+    println!("{} total records, {} in chunk", num_validation_tweets, num_in_chunk);
+    
     let mut threads_spawned = 0;
-    for (tweet_type, tweet) in validation_data {
+
+    let iter = validation_data.into_iter();
+    for i in 0..num_threads {
         threads_spawned += 1;
-        if threads_spawned == 100 {break;}
+
+        let validation_chunk = iter.clone().skip((i * num_in_chunk) as usize).take(num_in_chunk as usize);
         let bow_clone = bow.bags.clone();
         let btx = tx.clone();
         thread::spawn(move || {
-            btx.send(BagOfWords::test_sentence_static(bow_clone, tweet) == tweet_type)
+            let mut num_correct = 0;
+            for (tweet_type, tweet) in validation_chunk {
+                let bc = bow_clone.clone();
+                if BagOfWords::test_sentence_static(bc, tweet) == tweet_type {
+                    num_correct += 1;
+                }
+            }
+            btx.send(num_correct).expect("Error sending data from thread");
         });
     }
 
@@ -82,13 +100,11 @@ fn main() {
     let mut num_iterated = 0;
     for _ in 0..(threads_spawned-1) {
         let correct = rx.recv();
-        if correct.expect("Thread error") {
-            num_correct += 1;
-        } 
-        num_iterated += 1;
+        num_correct += correct.expect("Thread error");
+        num_iterated += num_in_chunk;
         let result: f32 = f32::ceil(num_correct as f32 / num_iterated as f32 * 100.0);
         let per_complete = f32::ceil(num_iterated as f32 / num_validation_tweets as f32 * 100.0);
-        println!("{}% correct, {}% complete", result, per_complete);
+        println!("{}% correct, {}% complete, {} processed records", result, per_complete, num_iterated);
     }
 
     let result: f32 = num_correct as f32 / num_validation_tweets as f32;

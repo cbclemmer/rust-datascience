@@ -47,10 +47,10 @@ impl BagOfWords {
         return BagOfWords { bags: hm }
     }
 
-    fn test_word(&self, word: String) -> String {
+    fn test_word(bow: BagMap, word: String) -> String {
         let mut best_prob: (String, f32) = (String::from(""), 0.0);
         let word_clone = &word.clone();
-        for bag in self.bags.clone().into_iter() {
+        for bag in bow.clone().into_iter() {
             let m_prob = bag.1.get(word_clone);
             if m_prob.is_none() {
                 continue;
@@ -66,7 +66,7 @@ impl BagOfWords {
     pub fn test_sentence_static(bow: BagMap, sentence: String) -> String {
         let mut totals_hm: HashMap<String, i32> = HashMap::new();
         for wd in sentence.split(" ") {
-            let best_bag = bow.test_word(String::from(wd));
+            let best_bag = BagOfWords::test_word(bow.clone(), String::from(wd));
             if best_bag.eq("") { continue; }
             let m_total = totals_hm.get(&best_bag);
             let total: i32 = if m_total.is_none() { 1 } else { m_total.expect("") + 1 };

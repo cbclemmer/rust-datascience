@@ -66,16 +66,25 @@ fn main() {
     let validation_data = get_input_data(String::from("data/twitter_validation.csv"));
 
     let num_validation_tweets = validation_data.len();
+    let (tx, rx) = mpsc::channel::<bool>();
+    let mut threads_spawned = 0;
+    for (tweet_type, tweet) in validation_data {
+        threads_spawned += 1;
+        if threads_spawned == 100 {break;}
+        let bow_clone = bow.bags.clone();
+        let btx = tx.clone();
+        thread::spawn(move || {
+            btx.send(BagOfWords::test_sentence_static(bow_clone, tweet) == tweet_type)
+        });
+    }
+
     let mut num_correct = 0;
     let mut num_iterated = 0;
-    let (tx, rx) = mpsc::channel::<bool>();
-    for (tweet_type, tweet) in validation_data {
-        let bow_clone = bow.bags.clone();
-        thread::spawn(move || {
-            if BagOfWords::test_sentence(bow_clone, tweet) == tweet_type {
-                num_correct += 1;
-            }
-        });
+    for _ in 0..(threads_spawned-1) {
+        let correct = rx.recv();
+        if correct.expect("Thread error") {
+            num_correct += 1;
+        } 
         num_iterated += 1;
         let result: f32 = f32::ceil(num_correct as f32 / num_iterated as f32 * 100.0);
         let per_complete = f32::ceil(num_iterated as f32 / num_validation_tweets as f32 * 100.0);

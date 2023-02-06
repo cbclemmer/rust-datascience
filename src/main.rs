@@ -8,6 +8,42 @@ use std::sync::mpsc;
 use bag_of_words::BagOfWords;
 use bag_of_words::InputTup;
 
+fn multi_thread_process_list<T1, T2> (
+    list: Vec<T1>, 
+    num_threads: i8, 
+    f_thread: fn(Vec<T1>) -> Vec<T2>, 
+    f_return: fn(Vec<T2>) -> ()
+) -> Vec<T2> 
+    where T1: Clone {
+    let (tx, rx) = mpsc::channel::<Vec<T2>>();
+
+    let list_size = list.len();
+    let num_in_chunk = f32::ceil(list_size as f32 / num_threads as f32) as i32;
+    println!("{} total records, {} in chunk", list_size, num_in_chunk);
+    
+    let mut threads_spawned: i8 = 0;
+
+    let iter = list.into_iter();
+    for i in 0..num_threads {
+        threads_spawned += 1;
+
+        let list_chunk = iter.clone().skip((i as i32 * num_in_chunk) as usize).take(num_in_chunk as usize).collect_vec();
+        let ctx = tx.clone();
+        thread::spawn(move || {
+            let a = f_thread(list_chunk);
+            // ctx.send(a).expect("Error sending data from thread");
+        });
+    }
+
+    let mut ret_val: Vec<T2> = Vec::new();
+    for _ in 0..threads_spawned {
+        let mut rec = rx.recv().expect("Recieved from thread error");
+        ret_val.append(&mut rec);
+        f_return(rec);
+    }
+    ret_val
+}
+
 fn strip_special_characters(input: String) -> String {
     let special_characters = "!@#$%^&*()_+-=[]{}\\|;':\",./<>?0123456789";
     input
@@ -47,6 +83,15 @@ fn get_input_data(file_path: String) -> Vec<InputTup> {
     let mut rdr = Reader::from_reader(file_contents.as_bytes());
 
     let mut num_records = 0;
+    println!("CSV read");
+
+    let records = rdr.records()
+        .into_iter()
+        .map(|r| r.expect("Error parsing record"))
+        .map(|r| (String::from(r.index(2)), String::from(r.index(3))))
+        .collect_vec();
+        
+    let num_threads = 10;
     for result in rdr.records() {
         let r = result.ok().expect("Error parsing record");
         num_records += 1;
@@ -63,7 +108,7 @@ fn main() {
     println!("Getting training data");
     let training_data = get_input_data(String::from("data/twitter_training.csv"));
     println!("Training data");
-    let bow = BagOfWords::new(&training_data);
+    let bow = BagOfWords::new(&training_data, 0.001);
 
     println!("Getting validation data");
     let validation_data = get_input_data(String::from("data/twitter_validation.csv"));
@@ -98,7 +143,7 @@ fn main() {
 
     let mut num_correct = 0;
     let mut num_iterated = 0;
-    for _ in 0..(threads_spawned-1) {
+    for _ in 0..threads_spawned {
         let correct = rx.recv();
         num_correct += correct.expect("Thread error");
         num_iterated += num_in_chunk;

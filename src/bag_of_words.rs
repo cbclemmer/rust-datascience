@@ -10,7 +10,7 @@ pub struct BagOfWords {
 }
 
 impl BagOfWords {
-    fn train_word_vector<'a>(input_data: Vec<String>) -> WordBag {
+    fn train_word_vector<'a>(input_data: Vec<String>, min_prob: f32) -> WordBag {
         let word_group = input_data.iter()
             .flat_map(|s| s.split(" "))
             .sorted()
@@ -26,12 +26,13 @@ impl BagOfWords {
         for (wd, count) in words.clone() {
             if wd.eq("") {continue;}
             let prob = count as f32 / input_length as f32;
+            if prob < min_prob {continue;}
             hm.insert(String::from(wd), prob);
         }
         hm
     }
 
-    pub fn new(input_data: &Vec<InputTup>) -> BagOfWords {
+    pub fn new(input_data: &Vec<InputTup>, min_prob: f32) -> BagOfWords {
         let input_groups = input_data.iter()
             .filter(|tup| tup.0 != "")
             .sorted_by(|tup1, tup2| tup1.0.cmp(&tup2.0))
@@ -40,7 +41,7 @@ impl BagOfWords {
         let mut hm = BagMap::new();
         for (key, group) in &input_groups {
             let wv_input = group.map(|tup| tup.1.to_owned()).collect_vec();
-            let wv = BagOfWords::train_word_vector(wv_input);
+            let wv = BagOfWords::train_word_vector(wv_input, min_prob);
             hm.insert(String::from(key), wv);
         }
         

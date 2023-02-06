@@ -15,7 +15,7 @@ fn strip_special_characters(input: String) -> String {
         .collect()
 }
 
-fn clean_words(input: String, bl_words: Vec<String>, wl_words: Vec<String>) -> String {
+fn clean_words(input: String, bl_words: Vec<String>) -> String {
     let stripped_input = strip_special_characters(input);
     let words = stripped_input.split(" ");
 
@@ -24,24 +24,10 @@ fn clean_words(input: String, bl_words: Vec<String>, wl_words: Vec<String>) -> S
         if bl_words.contains(&String::from(wd)) {
             continue;
         }
-        if !wl_words.contains(&String::from(wd)) {
-            continue;
-        }
         new_s.push(' ');
         new_s.push_str(wd);
     }
     String::from(new_s)
-}
-
-fn get_word_list(file_path: String) -> Vec<String> {
-    let file_data = fs::read_to_string(file_path).expect("Error reading file");
-    
-    let mut ret_vec: Vec<String> = Vec::new();
-    for wd in file_data.split("\n").flat_map(|s| s.split(",")) {
-        ret_vec.push(String::from(wd).to_lowercase());
-    }
-
-    ret_vec
 }
 
 fn get_input_data(file_path: String) -> Vec<InputTup> {
@@ -53,25 +39,6 @@ fn get_input_data(file_path: String) -> Vec<InputTup> {
         .map(|s| strip_special_characters(String::from(s)))
         .collect_vec();
 
-    let pos_folder = String::from("data/parts_of_speech/");
-
-    let mut adjectives_file = pos_folder.clone();
-    adjectives_file.push_str("adjective.txt");
-
-    let mut adverbs_file = pos_folder.clone();
-    adverbs_file.push_str("adverb.txt");
-
-    let mut nouns_file = pos_folder.clone();
-    nouns_file.push_str("noun.txt");
-
-    let mut verbs_file = pos_folder.clone();
-    verbs_file.push_str("verb.txt");
-
-    let mut whitelist_words = get_word_list(adjectives_file);
-    whitelist_words.append(&mut get_word_list(adverbs_file));
-    whitelist_words.append(&mut get_word_list(nouns_file));
-    whitelist_words.append(&mut get_word_list(verbs_file));
-    
     let file_contents = fs::read_to_string(file_path)
         .expect("error reading input file");
 
@@ -81,7 +48,7 @@ fn get_input_data(file_path: String) -> Vec<InputTup> {
         let r = result.ok().expect("Error parsing record");
         let sentiment = String::from(r.index(2));
         let tweet = String::from(r.index(3));
-        let pair = (sentiment, clean_words(tweet, blacklist_words.clone(), whitelist_words.clone()));
+        let pair = (sentiment, clean_words(tweet, blacklist_words.clone()));
         training_data.push(pair);
     }
     training_data
@@ -104,28 +71,11 @@ fn main() {
             num_correct += 1;
         }
         num_iterated += 1;
-        let result: f32 = num_correct as f32 / num_iterated as f32;
-        println!("Correct {}%", result * 100.0)
+        let result: f32 = f32::ceil(num_correct as f32 / num_iterated as f32 * 100.0);
+        let per_complete = f32::ceil(num_iterated as f32 / num_validation_tweets as f32 * 100.0);
+        println!("{}% correct, {}% complete", result, per_complete);
     }
 
     let result: f32 = num_correct as f32 / num_validation_tweets as f32;
     println!("Final result: {}%", result * 100.0)
 }
-
-
-// let mut top_keys: Vec<(&String, &f32)> = Vec::new();
-    // for tup in bow.bags.get("Positive").expect("err") {
-    //     top_keys.push(tup);
-    // }
-    // // let a  = top_keys.iter().sorted_by(|(_, prob1), (_, prob2)| (**prob1);
-    // let a = bow.bags.get("Positive")
-    //     .expect("err")
-    //     .iter()
-    //     .sorted_by(|(_, prob1), (_, prob2)| prob1.partial_cmp(prob2).expect("err"))
-    //     // .rev()
-    //     .take(30)
-    //     .collect_vec();
-
-    // for b in a {
-    //     println!("{}: {}", b.0, b.1);
-    // }

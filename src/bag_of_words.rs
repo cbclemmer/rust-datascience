@@ -6,10 +6,8 @@ pub type WordBag = HashMap<String, f32>;
 pub type BagMap = HashMap<String, WordBag>;
 
 pub struct BagOfWords {
-    bags: BagMap
+    pub bags: BagMap
 }
-
-
 
 impl BagOfWords {
     fn train_word_vector<'a>(input_data: Vec<String>) -> WordBag {

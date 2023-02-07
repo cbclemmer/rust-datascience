@@ -7,14 +7,20 @@ use std::sync::mpsc;
 
 use bag_of_words::BagOfWords;
 use bag_of_words::InputTup;
+use bag_of_words::BagMap;
 
-fn multi_thread_process_list<T1, T2> (
+fn multi_thread_process_list<T1, T2, T3> (
     list: Vec<T1>, 
+    context: T3,
     num_threads: i8, 
-    f_thread: fn(Vec<T1>) -> Vec<T2>, 
-    f_return: fn(Vec<T2>) -> ()
+    f_thread: fn(T3, Vec<T1>) -> Vec<T2>, 
+    f_return: fn(Vec<T2>, i32, usize) -> ()
 ) -> Vec<T2> 
-    where T1: Clone {
+    where 
+        T1: 'static + Send + Clone, 
+        T2: 'static + Send + Clone,
+        T3: 'static + Send + Clone
+    {
     let (tx, rx) = mpsc::channel::<Vec<T2>>();
 
     let list_size = list.len();
@@ -22,24 +28,25 @@ fn multi_thread_process_list<T1, T2> (
     println!("{} total records, {} in chunk", list_size, num_in_chunk);
     
     let mut threads_spawned: i8 = 0;
-
     let iter = list.into_iter();
-    for i in 0..num_threads {
-        threads_spawned += 1;
 
-        let list_chunk = iter.clone().skip((i as i32 * num_in_chunk) as usize).take(num_in_chunk as usize).collect_vec();
+    for i in 0..num_threads {
         let ctx = tx.clone();
+
+        threads_spawned += 1;
+        
+        let c = context.clone();
+        let list_chunk = iter.clone().skip((i as i32 * num_in_chunk) as usize).take(num_in_chunk as usize).collect_vec();
         thread::spawn(move || {
-            let a = f_thread(list_chunk);
-            // ctx.send(a).expect("Error sending data from thread");
+            ctx.send(f_thread(c, list_chunk)).expect("Error sending data from thread");
         });
     }
 
     let mut ret_val: Vec<T2> = Vec::new();
-    for _ in 0..threads_spawned {
+    for i in 1..threads_spawned+1 {
         let mut rec = rx.recv().expect("Recieved from thread error");
         ret_val.append(&mut rec);
-        f_return(rec);
+        f_return(ret_val.clone(), i as i32 * num_in_chunk, list_size);
     }
     ret_val
 }
@@ -82,6 +89,8 @@ fn get_input_data(file_path: String) -> Vec<InputTup> {
 
     let mut rdr = Reader::from_reader(file_contents.as_bytes());
 
+    
+
     let mut num_records = 0;
     println!("CSV read");
 
@@ -112,45 +121,26 @@ fn main() {
 
     println!("Getting validation data");
     let validation_data = get_input_data(String::from("data/twitter_validation.csv"));
-
-    let (tx, rx) = mpsc::channel::<i32>();
-
-    let num_threads = 16;
     let num_validation_tweets = validation_data.len();
-    let num_in_chunk = f32::ceil(num_validation_tweets as f32 / num_threads as f32) as i32;
-    println!("{} total records, {} in chunk", num_validation_tweets, num_in_chunk);
-    
-    let mut threads_spawned = 0;
 
-    let iter = validation_data.into_iter();
-    for i in 0..num_threads {
-        threads_spawned += 1;
+    let f_thread = |ctx: BagMap, chunk: Vec<(String, String)>| -> Vec<bool> {
+        let mut correct_vec = Vec::new();
+        for (tweet_type, tweet) in chunk {
+            let bc = ctx.clone();
+            correct_vec.push(BagOfWords::test_sentence_static(bc, tweet) == tweet_type)
+        }
+        correct_vec
+    };
 
-        let validation_chunk = iter.clone().skip((i * num_in_chunk) as usize).take(num_in_chunk as usize);
-        let bow_clone = bow.bags.clone();
-        let btx = tx.clone();
-        thread::spawn(move || {
-            let mut num_correct = 0;
-            for (tweet_type, tweet) in validation_chunk {
-                let bc = bow_clone.clone();
-                if BagOfWords::test_sentence_static(bc, tweet) == tweet_type {
-                    num_correct += 1;
-                }
-            }
-            btx.send(num_correct).expect("Error sending data from thread");
-        });
-    }
-
-    let mut num_correct = 0;
-    let mut num_iterated = 0;
-    for _ in 0..threads_spawned {
-        let correct = rx.recv();
-        num_correct += correct.expect("Thread error");
-        num_iterated += num_in_chunk;
+    let f_return = |ret: Vec<bool>, num_iterated: i32, list_size: usize| {
+        let num_correct = ret.into_iter().filter(|b| *b).collect_vec().len() as i32;
         let result: f32 = f32::ceil(num_correct as f32 / num_iterated as f32 * 100.0);
-        let per_complete = f32::ceil(num_iterated as f32 / num_validation_tweets as f32 * 100.0);
+        let per_complete = f32::ceil(num_iterated as f32 / list_size as f32 * 100.0);
         println!("{}% correct, {}% complete, {} processed records", result, per_complete, num_iterated);
-    }
+    };
+
+    let results = multi_thread_process_list(validation_data, bow.bags, 16, f_thread, f_return);
+    let num_correct = results.into_iter().filter(|b| *b).collect_vec().len() as i32;
 
     let result: f32 = num_correct as f32 / num_validation_tweets as f32;
     println!("Final result: {}%", result * 100.0)

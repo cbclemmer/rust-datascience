@@ -76,8 +76,6 @@ fn clean_words(input: String, bl_words: Vec<String>) -> String {
 }
 
 fn get_input_data(file_path: String) -> Vec<InputTup> {
-    let mut training_data: Vec<InputTup> = Vec::new();
-    
     let blacklist_words = fs::read_to_string("data/bow_blacklist.txt")
         .expect("Error reading blacklist file")
         .split("\n")
@@ -89,28 +87,24 @@ fn get_input_data(file_path: String) -> Vec<InputTup> {
 
     let mut rdr = Reader::from_reader(file_contents.as_bytes());
 
-    
-
-    let mut num_records = 0;
-    println!("CSV read");
-
     let records = rdr.records()
         .into_iter()
         .map(|r| r.expect("Error parsing record"))
         .map(|r| (String::from(r.index(2)), String::from(r.index(3))))
         .collect_vec();
-        
-    let num_threads = 10;
-    for result in rdr.records() {
-        let r = result.ok().expect("Error parsing record");
-        num_records += 1;
-        let sentiment = String::from(r.index(2));
-        let tweet = String::from(r.index(3));
-        let pair = (sentiment, clean_words(tweet, blacklist_words.clone()));
-        training_data.push(pair);
-    }
-    println!("{} csv records", num_records);
-    training_data
+
+    let f_thread = |bl_words: Vec<String>, chunk: Vec<(String, String)>| -> Vec<(String, String)> {
+        let mut ret = Vec::new();
+        for (sentiment, tweet) in chunk {
+            let pair = (sentiment, clean_words(tweet, bl_words.clone()));
+            ret.push(pair);
+        }
+        ret
+    };
+
+    let f_return = |_: Vec<(String, String)>, _: i32, _: usize| { };
+
+    multi_thread_process_list(records, blacklist_words, 16, f_thread, f_return)
 }
 
 fn main() {

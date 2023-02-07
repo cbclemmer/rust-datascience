@@ -10,7 +10,7 @@ pub struct BagOfWords {
 }
 
 impl BagOfWords {
-    fn train_word_vector<'a>(input_data: Vec<String>, min_prob: f32) -> WordBag {
+    fn train_word_vector(input_data: Vec<String>, min_prob: f32) -> WordBag {
         let word_group = input_data.iter()
             .flat_map(|s| s.split(" "))
             .sorted()

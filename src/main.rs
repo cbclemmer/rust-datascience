@@ -111,7 +111,7 @@ fn main() {
     println!("Getting training data");
     let training_data = get_input_data(String::from("data/twitter_training.csv"));
     println!("Training data");
-    let bow = BagOfWords::new(&training_data, 0.001);
+    let bow = BagOfWords::new(&training_data, 0.0001);
 
     println!("Getting validation data");
     let validation_data = get_input_data(String::from("data/twitter_validation.csv"));

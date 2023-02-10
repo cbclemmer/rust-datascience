@@ -13,15 +13,15 @@ impl BagOfWords {
     // Find minimum and maximum probabilities of each word
     // if there is not a substantial difference between the different probabilities
     // assume that it is not useful and remove it from the bags
-    fn prune(mut self) {
-        let words = self.bags.into_iter()
-            .flat_map(|(_, bag)| bag.into_iter())
-            .group_by(|(wd, _)| String::from(wd));
+    // fn prune(mut self) {
+    //     let words = self.bags.into_iter()
+    //         .flat_map(|(_, bag)| bag.into_iter())
+    //         .group_by(|(wd, _)| String::from(wd));
 
-        for (wd, probs) in words.into_iter() {
-            // let min = 
-        }
-    }
+    //     for (wd, probs) in words.into_iter() {
+    //         // let min = 
+    //     }
+    // }
 
     fn train_word_vector(input_data: Vec<String>, min_prob: f32) -> WordBag {
         let word_group = input_data.iter()

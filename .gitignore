@@ -1,2 +1,7 @@
 /target
 /data
+Cargo.lock
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile

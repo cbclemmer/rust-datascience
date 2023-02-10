@@ -9,6 +9,11 @@ use bag_of_words::BagOfWords;
 use bag_of_words::InputTup;
 use bag_of_words::BagMap;
 
+#[link(name = "lib", kind = "static")]
+extern "C" {
+    fn add(a: i32, b: i32) -> i32;
+}
+
 fn multi_thread_process_list<T1, T2, T3> (
     list: Vec<T1>, 
     context: T3,
@@ -108,6 +113,10 @@ fn get_input_data(file_path: String) -> Vec<InputTup> {
 }
 
 fn main() {
+    let c = unsafe { add(1, 2) };
+    println!("{}", c);
+    return;
+
     println!("Getting training data");
     let training_data = get_input_data(String::from("data/twitter_training.csv"));
     println!("Training data");

@@ -12,3 +12,6 @@ path="src/bag_of_words.rs"
 [dependencies]
 csv = "1.1.6"
 itertools = "0.10.5"
+
+[build-dependencies]
+cmake = "0.1.49"

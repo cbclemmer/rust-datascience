@@ -1,7 +1,8 @@
 use itertools::Itertools;
 use std::collections::HashMap;
 
-pub type InputTup = (String, String);
+use crate::util::InputTup;
+
 pub type WordBag = HashMap<String, f32>;
 pub type BagMap = HashMap<String, WordBag>;
 

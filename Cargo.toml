@@ -6,12 +6,17 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-name="bag_of_words"
-path="src/bag_of_words.rs"
+name="lib"
+path="src/lib.rs"
+
+[markov_chain]
+name="markov_chain"
+path="src/markov_chain.rs"
+
+[util]
+name="util"
+path="src/util.rs"
 
 [dependencies]
 csv = "1.1.6"
 itertools = "0.10.5"
-
-[build-dependencies]
-cmake = "0.1.49"

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use itertools::Itertools;
 
@@ -102,7 +102,9 @@ impl MarkovChain {
         }
         println!("Group: {:?}", start2.elapsed());
 
+        let start3 = Instant::now();
         let states = MarkovChain::calculate_states(totals);
+        println!("Calculate: {:?}", start3.elapsed());
         states
     }
 

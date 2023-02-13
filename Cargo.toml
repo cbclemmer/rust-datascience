@@ -20,3 +20,7 @@ path="src/util.rs"
 [dependencies]
 csv = "1.1.6"
 itertools = "0.10.5"
+rustc-demangle = "0.1"
+
+[profiel.dev]
+debug=1

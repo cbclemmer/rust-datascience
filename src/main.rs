@@ -2,7 +2,7 @@ use itertools::Itertools;
 
 use lib::bag_of_words::BagMap;
 use lib::bag_of_words::BagOfWords;
-use lib::markov_chain::MarkovChain;
+use lib::markov_chain::{MarkovChain, StateMap};
 use lib::util::{get_input_data_csv, get_markov_data, multi_thread_process_list};
 
 fn validate_bow() {
@@ -44,17 +44,29 @@ fn validate_mc() {
     println!("Getting training data");
     let stop_word_file = String::from("data/stop_words.txt");
     let training_data = get_markov_data(String::from("data/bee_movie.txt"), &stop_word_file);
+    let num_training_data = training_data.len();
     println!("Training markov chain");
     let mc = MarkovChain::new(training_data.clone());
-    let mut num_correct = 0;
     println!("Validating chain");
-    for (current_word, next_word) in training_data.clone() {
-        let prediction = MarkovChain::predict(mc.states.clone(), current_word);
-        if prediction.eq(&next_word) {
-            num_correct = num_correct + 1;
+    
+    let f_thread = |ctx: StateMap, chunk: Vec<(String, String)>| -> Vec<bool> {
+        let mut correct_vec = Vec::new();
+        for (current_word, next_word) in chunk {
+            let prediction = MarkovChain::predict(ctx.clone(), current_word);
+            correct_vec.push(prediction.eq(&next_word));
         }
-    }
-    println!("Correct: {}%", f32::ceil((num_correct as f32 / training_data.len() as f32) * 100 as f32))
+        correct_vec
+    };
+
+    let f_return = |_, _, _| { };
+
+    let results = multi_thread_process_list(training_data, mc.states, 16, f_thread, f_return);
+
+    // println!("Correct: {}%", f32::ceil((num_correct as f32 / training_data.len() as f32) * 100 as f32))
+    let num_correct = results.into_iter().filter(|b| *b).collect_vec().len() as i32;
+    
+    let result: f32 = num_correct as f32 / num_training_data as f32;
+    println!("Final result: {}%", result * 100.0)
 }
 
 fn main() {

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
-use crate::util::InputTup;
+use crate::util::{InputTup, multi_thread_process_list};
 
 pub type StateMap = HashMap<String, HashMap<String, f32>>;
 pub type StateTotals = HashMap<String, HashMap<String, i32>>;
@@ -48,10 +49,14 @@ impl MarkovChain {
 
     pub fn train(input_data: Vec<InputTup>) -> StateMap {
         let mut totals = StateTotals::new();
+        
         for (from_state, to_state) in input_data {
             totals = MarkovChain::feed(totals.clone(), from_state, to_state);
         }
-        MarkovChain::calculate_states(totals)
+
+        // multi_thread_process_list(input_data, totals, 16, f_thread, f_return);
+        let states = MarkovChain::calculate_states(totals);
+        states
     }
 
     pub fn new(input_data: Vec<InputTup>) -> MarkovChain {

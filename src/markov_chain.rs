@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
+use itertools::Itertools;
+
 use crate::util::{InputTup, multi_thread_process_list};
 
 pub type StateMap = HashMap<String, HashMap<String, f32>>;
@@ -49,12 +51,57 @@ impl MarkovChain {
 
     pub fn train(input_data: Vec<InputTup>) -> StateMap {
         let mut totals = StateTotals::new();
-        
-        for (from_state, to_state) in input_data {
-            totals = MarkovChain::feed(totals.clone(), from_state, to_state);
-        }
 
-        // multi_thread_process_list(input_data, totals, 16, f_thread, f_return);
+        let f_thread = |_, chunk: Vec<InputTup>| -> Vec<StateTotals> {
+            let mut totals = StateTotals::new();
+            for (from_state, to_state) in chunk {
+                totals = MarkovChain::feed(totals.clone(), from_state, to_state);
+            }
+            let mut ret_val = Vec::new();
+            ret_val.push(totals);
+            ret_val
+        };
+
+        let f_return = |_, _, _| { };
+
+        let start1 = Instant::now();
+        let results = multi_thread_process_list(input_data, 0, 16, f_thread, f_return);
+        println!("Feed: {:?}", start1.elapsed());
+
+        let start2 = Instant::now();
+        let groups = results
+            .into_iter()
+            .flat_map(|hm| hm.into_iter())
+            .sorted_by(|(from1, _), (from2, _)| from1.cmp(&from2))
+            .group_by(|(from, _)| from.to_owned());
+        
+        for (from, from_list) in groups.into_iter() {
+            let to_list_groups = from_list.into_iter()
+                .flat_map(|(_, to_hm)| {
+                    to_hm.into_iter().collect_vec()
+                })
+                .sorted_by(|(to1, _), (to2, _)| to1.cmp(&to2))
+                .group_by(|(to, _)| to.to_owned());
+
+            let to_list = to_list_groups
+                .into_iter()
+                .map(|(to, total_groups)| {
+                    let total: i32 = total_groups
+                        .into_iter()
+                        .map(|(_, total)| total)
+                        .sum();
+                    (to, total)
+                })
+                .collect_vec();
+            
+            let mut to_hm: HashMap<String, i32> = HashMap::new();
+            for (to, total) in to_list {
+                to_hm.insert(to, total);
+            }
+            totals.insert(from, to_hm);
+        }
+        println!("Group: {:?}", start2.elapsed());
+
         let states = MarkovChain::calculate_states(totals);
         states
     }

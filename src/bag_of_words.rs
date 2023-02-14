@@ -1,9 +1,12 @@
 use itertools::Itertools;
 use std::collections::HashMap;
+use rand::Rng;
 
 use crate::util::InputTup;
 
-pub type WordBag = HashMap<String, f32>;
+// (total num words, word -> probability)
+// probability = num times word appears / total num words
+pub type WordBag = (usize, HashMap<String, f32>);
 pub type BagMap = HashMap<String, WordBag>;
 
 pub struct BagOfWords {
@@ -24,7 +27,7 @@ impl BagOfWords {
     //     }
     // }
 
-    fn train_word_vector(input_data: Vec<String>, min_prob: f32) -> WordBag {
+    fn train_word_vector(&mut self, bag_name: &String, input_data: &Vec<String>, min_prob: &f32) {
         let word_group = input_data.iter()
             .flat_map(|s| s.split(" "))
             .sorted()
@@ -35,44 +38,60 @@ impl BagOfWords {
             .map(|(wd, grp)| (wd, grp.count()))
             .collect_vec();
         
-        let mut hm = WordBag::new();
+        let o_wv = self.bags.get(bag_name);
+        let (current_total, mut wv) = if o_wv.is_some() 
+            { o_wv.expect("ERR").clone() } 
+            else { (0 as usize, HashMap::new() as HashMap<String, f32>) };
+
         let input_length = input_data.len();
-        for (wd, count) in words.clone() {
+        let total_inputs = input_length + current_total;
+        for (wd, input_count) in words.clone() {
             if wd.eq("") {continue;}
-            let prob = count as f32 / input_length as f32;
-            if prob < min_prob {continue;}
-            hm.insert(String::from(wd), prob);
+            let o_current_prob = wv.get(&wd);
+            let current_prob = if o_current_prob.is_some()
+                { o_current_prob.expect("ERR").clone() }
+                else { 0 as f32 };
+
+            let current_count = f32::ceil(current_prob * current_total as f32) as usize;
+            let total_count = input_count + current_count;
+
+            let prob = total_count as f32 / total_inputs as f32;
+            if prob < *min_prob {continue;}
+            wv.insert(String::from(wd), prob);
         }
-        hm
+        self.bags.insert(bag_name.clone(), (total_inputs, wv));
     }
 
-    pub fn new(input_data: &Vec<InputTup>, min_prob: f32) -> BagOfWords {
+    pub fn new(input_data: &Vec<InputTup>, min_prob: &f32) -> BagOfWords {
+        let bow = BagOfWords { bags: BagMap::new() };
+        bow.train(input_data, min_prob)
+    }
+    
+    pub fn train(mut self, input_data: &Vec<InputTup>, min_prob: &f32) -> BagOfWords {
         let input_groups = input_data.iter()
             .filter(|tup| tup.0 != "")
             .sorted_by(|tup1, tup2| tup1.0.cmp(&tup2.0))
             .group_by(|&tup| tup.0.to_owned());
         
-        let mut hm = BagMap::new();
         for (key, group) in &input_groups {
             let wv_input = group.map(|tup| tup.1.to_owned()).collect_vec();
-            let wv = BagOfWords::train_word_vector(wv_input, min_prob);
-            hm.insert(String::from(key), wv);
+            self.train_word_vector(&key, &wv_input, min_prob);
         }
         
-        return BagOfWords { bags: hm }
+        self
     }
 
     fn test_word(bow: BagMap, word: String) -> String {
         let mut best_prob: (String, f32) = (String::from(""), 0.0);
         let word_clone = &word.clone();
-        for bag in bow.clone().into_iter() {
-            let m_prob = bag.1.get(word_clone);
+        for (bag_name, (_, bag)) in bow.clone().into_iter() {
+            let m_prob = bag.get(word_clone);
             if m_prob.is_none() {
                 continue;
             }
             let prob = m_prob.expect("");
             if *prob > best_prob.1 {
-                best_prob = (bag.0, prob.to_owned());
+                best_prob = (bag_name, prob.to_owned());
             }
         }
         String::from(best_prob.0)
@@ -101,5 +120,11 @@ impl BagOfWords {
 
     pub fn test_sentence(&self, sentence: String) -> String {
         BagOfWords::test_sentence_static(self.bags.clone(), sentence)
+    }
+
+    pub fn learn(mut self, input: Vec<InputTup>, step_size: f32, num_iterations: i32, modify_amount: i32) {
+        for _ in 0..num_iterations {
+
+        }
     }
 }

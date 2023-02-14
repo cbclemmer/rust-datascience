@@ -8,10 +8,10 @@ use std::sync::mpsc;
 pub type InputTup = (String, String);
 
 pub fn multi_thread_process_list<T1, T2, T3> (
-    list: Vec<T1>, 
+    list: &Vec<T1>, 
     context: T3,
     num_threads: i8, 
-    f_thread: fn(T3, Vec<T1>) -> Vec<T2>, 
+    f_thread: fn(T3, &Vec<T1>) -> Vec<T2>, 
     f_return: fn(Vec<T2>, i32, usize) -> ()
 ) -> Vec<T2> 
     where 
@@ -26,7 +26,7 @@ pub fn multi_thread_process_list<T1, T2, T3> (
     println!("{} total records, {} in chunk", list_size, num_in_chunk);
     
     let mut threads_spawned: i8 = 0;
-    let iter = list.into_iter();
+    let iter = list.clone().into_iter();
 
     for i in 0..num_threads {
         let ctx = tx.clone();
@@ -36,7 +36,7 @@ pub fn multi_thread_process_list<T1, T2, T3> (
         let c = context.clone();
         let list_chunk = iter.clone().skip((i as i32 * num_in_chunk) as usize).take(num_in_chunk as usize).collect_vec();
         thread::spawn(move || {
-            ctx.send(f_thread(c, list_chunk)).expect("Error sending data from thread");
+            ctx.send(f_thread(c, &list_chunk)).expect("Error sending data from thread");
         });
     }
 
@@ -49,7 +49,7 @@ pub fn multi_thread_process_list<T1, T2, T3> (
     ret_val
 }
 
-pub fn strip_special_characters(input: String) -> String {
+pub fn strip_special_characters(input: &String) -> String {
     let special_characters = "!@#$%^&*()_+-=[]{}\\|;':\",./<>?0123456789";
     input
         .to_lowercase()
@@ -58,7 +58,7 @@ pub fn strip_special_characters(input: String) -> String {
         .collect()
 }
 
-pub fn clean_words(input: String, bl_words: Vec<String>) -> String {
+pub fn clean_words(input: &String, bl_words: &Vec<String>) -> String {
     let stripped_input = strip_special_characters(input);
     let words = stripped_input.split(" ");
 
@@ -77,7 +77,7 @@ fn get_stop_words(file_path: &String) -> Vec<String> {
     fs::read_to_string(file_path)
         .expect("Error reading stop word file")
         .split("\n")
-        .map(|s| strip_special_characters(String::from(s)))
+        .map(|s| strip_special_characters(&String::from(s)))
         .collect_vec()
 }
 
@@ -95,10 +95,10 @@ pub fn get_input_data_csv(csv_file: String, stop_word_file: &String) -> Vec<Inpu
         .map(|r| (String::from(r.index(2)), String::from(r.index(3))))
         .collect_vec();
 
-    let f_thread = |bl_words: Vec<String>, chunk: Vec<(String, String)>| -> Vec<(String, String)> {
+    let f_thread = |bl_words: Vec<String>, chunk: &Vec<(String, String)>| -> Vec<(String, String)> {
         let mut ret = Vec::new();
         for (sentiment, tweet) in chunk {
-            let pair = (sentiment, clean_words(tweet, bl_words.clone()));
+            let pair = (String::from(sentiment), clean_words(tweet, &bl_words));
             ret.push(pair);
         }
         ret
@@ -106,14 +106,14 @@ pub fn get_input_data_csv(csv_file: String, stop_word_file: &String) -> Vec<Inpu
 
     let f_return = |_: Vec<(String, String)>, _: i32, _: usize| { };
 
-    multi_thread_process_list(records, stop_words, 16, f_thread, f_return)
+    multi_thread_process_list(&records, stop_words, 16, f_thread, f_return)
 }
 
 pub fn get_markov_data(text_file: String, stop_word_file: &String) -> Vec<InputTup> {
     let stop_words = get_stop_words(&stop_word_file);
 
     let file_contents = fs::read_to_string(text_file).expect("error reading input file");
-    let cleaned_text = clean_words(file_contents, stop_words);
+    let cleaned_text = clean_words(&file_contents, &stop_words);
     let mut last_word = "";
     let mut ret: Vec<InputTup> = Vec::new();
     for word in cleaned_text.split(" ") {

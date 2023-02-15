@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Index};
 use rand::Rng;
 use std::time::{Instant, Duration};
 
@@ -40,7 +40,7 @@ impl BagOfWords {
 
         let input_length = input_data.len();
         let total_inputs = input_length + current_total;
-        for (wd, input_count) in words.clone() {
+        for (wd, input_count) in words {
             if wd.eq("") {continue;}
             let o_current_prob = wv.get(&wd);
             let current_prob = if o_current_prob.is_some()
@@ -75,26 +75,25 @@ impl BagOfWords {
         self
     }
 
-    fn test_word(bow: BagMap, word: &String) -> String {
+    fn test_word(bow: &BagMap, word: &String) -> String {
         let mut best_prob: (String, f32) = (String::from(""), 0.0);
-        let word_clone = &word.clone();
-        for (bag_name, (_, bag)) in bow.clone().into_iter() {
-            let m_prob = bag.get(word_clone);
+        for (bag_name, (_, bag)) in bow.into_iter() {
+            let m_prob = bag.get(word);
             if m_prob.is_none() {
                 continue;
             }
             let prob = m_prob.expect("");
             if *prob > best_prob.1 {
-                best_prob = (bag_name, prob.to_owned());
+                best_prob = (bag_name.to_owned(), prob.to_owned());
             }
         }
         String::from(best_prob.0)
     }
 
-    pub fn test_sentence_static(bow: BagMap, sentence: &String) -> String {
+    pub fn test_sentence_static(bow: &BagMap, sentence: &String) -> String {
         let mut totals_hm: HashMap<String, i32> = HashMap::new();
         for wd in sentence.split(" ") {
-            let best_bag = BagOfWords::test_word(bow.clone(), &String::from(wd));
+            let best_bag = BagOfWords::test_word(bow, &String::from(wd));
             if best_bag.eq("") { continue; }
             let m_total = totals_hm.get(&best_bag);
             let total: i32 = if m_total.is_none() { 1 } else { m_total.expect("") + 1 };
@@ -113,7 +112,7 @@ impl BagOfWords {
     }
 
     pub fn test_sentence(&self, sentence: &String) -> String {
-        BagOfWords::test_sentence_static(self.bags.clone(), sentence)
+        BagOfWords::test_sentence_static(&self.bags, sentence)
     }
 
     pub fn test(bags: &BagMap, input: &Vec<InputTup>) -> f32 {
@@ -121,37 +120,34 @@ impl BagOfWords {
         let f_thread = |ctx: BagMap, chunk: &Vec<(String, String)>| -> Vec<bool> {
             let mut correct_vec = Vec::new();
             for (tweet_type, sentence) in chunk {
-                correct_vec.push(&BagOfWords::test_sentence_static(ctx.clone(), sentence) == tweet_type)
+                correct_vec.push(&BagOfWords::test_sentence_static(&ctx, sentence) == tweet_type)
             }
             correct_vec
         };
         
-        let f_return = |ret: Vec<bool>, num_iterated: i32, list_size: usize| {
-            let num_correct = ret.into_iter().filter(|b| *b).collect_vec().len() as i32;
-            let result: f32 = f32::ceil(num_correct as f32 / num_iterated as f32 * 100.0);
-            let per_complete = f32::ceil(num_iterated as f32 / list_size as f32 * 100.0);
-            // println!("{}% correct, {}% complete, {} processed records", result, per_complete, num_iterated);
-        };
-        
-        let results = multi_thread_process_list(input, bags.clone(), 16, f_thread, f_return);
+        let results = multi_thread_process_list(input, bags.clone(), 16, f_thread, None);
         let num_correct = results.into_iter().filter(|b| *b).collect_vec().len() as i32;
         
         num_correct as f32 / num_inputs as f32
     }
 
-    fn prune_probability(&mut self, input: &Vec<InputTup>) {
+    fn prune_probability(&self, input: &Vec<InputTup>, o_initial_accuracy: Option<f32>) -> (f32, BagMap) {
         println!("\n\n\nOptimizing by minimum probability");
         println!("Testing accuracy...");
-        let initial_accuracy = BagOfWords::test(&self.bags, input);
+        let initial_accuracy = if o_initial_accuracy.is_none()
+            { BagOfWords::test(&self.bags, input) }
+            else { o_initial_accuracy.expect("ERR") };
+
         println!("Accuracy: {}%", f32::ceil(initial_accuracy * 100 as f32));
 
         let mut min_prob = 0.00001;
         let mut current_accuracy: f32 = 0 as f32;
         let mut last_accuracy: f32;
+        let mut ret_bags = self.bags.clone();
         loop {
             println!("\nPruning...");
             println!("Min probability: {}%", min_prob * 100 as f32);
-            let mut tmp_bags = self.bags.clone();
+            let mut tmp_bags = ret_bags.clone();
             let mut removed_words = 0;
             for (bag_name, (total_inputs, mut bag_map)) in tmp_bags.clone() {
                 for (word, prob) in bag_map.clone() {
@@ -165,35 +161,40 @@ impl BagOfWords {
             println!("Removed Words: {}", removed_words);
             last_accuracy = current_accuracy;
             println!("\nTesting accuracy...");
-            current_accuracy = BagOfWords::test(&self.bags, input);
+            current_accuracy = BagOfWords::test(&tmp_bags, input);
             println!("Accuracy: {}%", get_percent(&current_accuracy));
             if current_accuracy > initial_accuracy - 0.1  as f32 {
                 println!("\nAccuracy target met!");
-                self.bags = tmp_bags;
-                min_prob = min_prob * 10 as f32;
+                ret_bags = tmp_bags;
+                min_prob = min_prob * 2 as f32;
             } else {
-                min_prob = min_prob / 10 as f32;
+                min_prob = min_prob / 2 as f32;
                 break;
             }
         }
 
         println!("\nPruning by probability complete");
         println!("Min probability: {}%\nAccuracy: {}%\n\n\n", &min_prob * 100 as f32, get_percent(&last_accuracy));
+        (last_accuracy, ret_bags)
     }
 
-    fn prune_similarity(&self, max_deviation: &f32) -> BagMap {
-        let word_groups = self.bags
+    fn get_words_in_bags(bags: &BagMap) -> Vec<String> {
+        let word_groups = bags
             .clone()
             .into_iter()
             .flat_map(|(_, (_, bag))| bag.into_iter())
             .sorted_by(|(wd1, _), (wd2, _)| wd1.cmp(wd2))
             .group_by(|(wd, _)| String::from(wd));
-
-        let words = word_groups
+    
+        word_groups
             .into_iter()
             .map(|(wd, _)| wd)
             .dedup()
-            .collect_vec();
+            .collect_vec()
+    }
+
+    fn prune_similarity(&self, max_deviation: &f32) -> BagMap {
+        let words = BagOfWords::get_words_in_bags(&self.bags);
 
         let mut remove_words = Vec::new();
         println!("Words: {}", words.clone().into_iter().collect_vec().len());
@@ -234,19 +235,24 @@ impl BagOfWords {
             }
             ret_bags.insert(bag_name.to_owned(), (size, bag));
         }
-
+        remove_words.dedup();
         println!("Removed words: {}", remove_words.len());
         ret_bags
     }
 
-    fn prune_similarity_loop(&mut self, input: &Vec<InputTup>) {
+    // TODO: decrease max deviation until there are no removed words, then increase
+    fn prune_similarity_loop(&self, input: &Vec<InputTup>, o_initial_accuracy: Option<f32>) -> (f32, BagMap) {
         println!("\n\n\nOptimizing by maximum deviation");
-        let mut max_deviation = 0.000001;
+        let mut max_deviation = 0.00000001;
         let mut last_accuracy: f32;
         println!("Testing Accuracy...");
-        let initial_accuracy = BagOfWords::test(&self.bags, input);
+        let initial_accuracy = if o_initial_accuracy.is_none()
+            { BagOfWords::test(&self.bags, input) }
+            else { o_initial_accuracy.expect("ERR") };
+
         let mut new_accuracy = initial_accuracy;
         println!("Accuracy: {}%", get_percent(&initial_accuracy));
+        let mut ret_bags = self.bags.clone();
         loop {
             println!("\nPruning...");
             println!("Max deviation: {}", max_deviation);
@@ -257,15 +263,80 @@ impl BagOfWords {
             new_accuracy = BagOfWords::test(&tmp_bags, input);
             println!("Accuracy: {}%", get_percent(&new_accuracy));
             if new_accuracy > initial_accuracy - 0.1 as f32 {
-                max_deviation = max_deviation * 10 as f32;
-                self.bags = tmp_bags;
+                max_deviation = max_deviation * 2 as f32;
+                ret_bags = tmp_bags;
             } else {
-                max_deviation = max_deviation / 10 as f32;
+                max_deviation = max_deviation / 2 as f32;
                 break;
             }
         }
         println!("\nOptimizing by similarity complete");
         println!("Optimized to max deviation: {} with accuracy: {}%\n\n", max_deviation * 100 as f32, get_percent(&last_accuracy));
+        (last_accuracy, ret_bags)
+    }
+
+    fn randomize_inputs(bags: &BagMap) -> BagMap {
+        // let timer = Instant::now();
+        let mut rng = rand::thread_rng();
+        let num_params = 10;
+        let step_size = 0.01;
+
+        let words = BagOfWords::get_words_in_bags(bags);
+        let word_length = words.len();
+        let mut random_words: Vec<String> = Vec::new();
+        for _ in 0..num_params {
+            let idx = (rng.gen::<f32>() as f32 * word_length as f32) as usize;
+            random_words.push(words.index(idx).clone());
+        }
+
+        let mut ret_bags: BagMap = bags.clone();
+        for (bag_name, (total, wd_hm)) in bags {
+            let mut ret_bag = wd_hm.clone();
+            for wd in &random_words {
+                let o_current_prob = ret_bag.get(wd);
+                if o_current_prob.is_none() { continue; }
+                let current_prob = o_current_prob.expect("ERR");
+                ret_bag.insert(wd.to_owned(), current_prob + step_size);
+            }
+            ret_bags.insert(bag_name.to_owned(), (*total, ret_bag));
+        }
+
+        // println!("Randomizer time: {:?}", timer.elapsed());
+
+        // let test_timer = Instant::now();
+        // println!("Test time: {:?}", test_timer.elapsed());
+        ret_bags
+    }
+
+    fn learn_randomizer_loop(&self, input: &Vec<InputTup>, iterations: i32, o_initial_accuracy: Option<f32>) -> (f32, BagMap) {
+        println!("\n\n\nStarting randomizer");
+        println!("\nTesting Accuracy...");
+        let initial_accuracy = if o_initial_accuracy.is_none()
+            { BagOfWords::test(&self.bags, input) }
+            else { o_initial_accuracy.expect("ERR") };
+
+        let mut current_accuracy = initial_accuracy;
+        let mut ret_bags = self.bags.clone();
+        let iter_list = 0..iterations;
+        for i in 0..iterations {
+            if i % 100 == 0 {
+                println!("{} iterations", i);
+            }
+            let f_thread = |(input_ctx, bags_ctx): (&Vec<InputTup>, BagMap), _: &Vec<i32>| -> Vec<(f32, BagMap)> {
+                let new_bags = BagOfWords::randomize_inputs(&bags_ctx);
+                let new_accuracy = BagOfWords::test(&new_bags, &input_ctx);
+                vec![(new_accuracy, new_bags)]
+            };
+
+            let ret_vec = multi_thread_process_list(&iter_list.collect_vec(), (input.clone(), self.bags.clone()), 16, f_thread, None);
+
+            // if new_accuracy > current_accuracy {
+            //     println!("++Accuracy: {}", get_percent(&new_accuracy));
+            //     current_accuracy = new_accuracy;
+            //     ret_bags = new_bags;
+            // }
+        }
+        (current_accuracy, ret_bags)
     }
 
     // , step_size: f32, num_iterations: i32, modify_amount: i32
@@ -273,7 +344,13 @@ impl BagOfWords {
         println!("\nRunning learning procedure");
         println!("Num inputs: {}", input.len());
         // find minimum probability for words that still make the outcome reasonably accurate
-        self.prune_similarity_loop(&input.clone().into_iter().take(100).collect_vec());
-        self.prune_probability(&input.clone().into_iter().take(100).collect_vec());
+        let (accuracy, bags) = self.prune_similarity_loop(&input, None);
+        self.bags = bags;
+        
+        let (accuracy, bags) = self.prune_probability(&input, Some(accuracy));
+        self.bags = bags;
+
+        let (_, bags) = self.learn_randomizer_loop(input, 1000, Some(accuracy));
+        self.bags = bags;
     }
 }

@@ -12,7 +12,7 @@ pub fn multi_thread_process_list<T1, T2, T3> (
     context: T3,
     num_threads: i8, 
     f_thread: fn(T3, &Vec<T1>) -> Vec<T2>, 
-    f_return: fn(Vec<T2>, i32, usize) -> ()
+    f_return: Option<fn(Vec<T2>, i32, usize) -> ()>
 ) -> Vec<T2> 
     where 
         T1: 'static + Send + Clone, 
@@ -44,7 +44,9 @@ pub fn multi_thread_process_list<T1, T2, T3> (
     for i in 1..threads_spawned+1 {
         let mut rec = rx.recv().expect("Recieved from thread error");
         ret_val.append(&mut rec);
-        f_return(ret_val.clone(), i as i32 * num_in_chunk, list_size);
+        if f_return.is_some() {
+            f_return.expect("ERR F RETURN")(ret_val.clone(), i as i32 * num_in_chunk, list_size);
+        }
     }
     ret_val
 }
@@ -104,9 +106,7 @@ pub fn get_input_data_csv(csv_file: String, stop_word_file: &String) -> Vec<Inpu
         ret
     };
 
-    let f_return = |_: Vec<(String, String)>, _: i32, _: usize| { };
-
-    multi_thread_process_list(&records, stop_words, 16, f_thread, f_return)
+    multi_thread_process_list(&records, stop_words, 16, f_thread, None)
 }
 
 pub fn get_markov_data(text_file: String, stop_word_file: &String) -> Vec<InputTup> {

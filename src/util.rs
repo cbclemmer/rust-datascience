@@ -23,7 +23,7 @@ pub fn multi_thread_process_list<T1, T2, T3> (
 
     let list_size = list.len();
     let num_in_chunk = f32::ceil(list_size as f32 / num_threads as f32) as i32;
-    println!("{} total records, {} in chunk", list_size, num_in_chunk);
+    // println!("{} total records, {} in chunk", list_size, num_in_chunk);
     
     let mut threads_spawned: i8 = 0;
     let iter = list.clone().into_iter();
@@ -125,4 +125,8 @@ pub fn get_markov_data(text_file: String, stop_word_file: &String) -> Vec<InputT
         last_word = word.clone();
     }
     ret
+}
+
+pub fn get_percent(prob: &f32) -> f32 { 
+    f32::ceil(prob * 10000 as f32) / 100 as f32 
 }

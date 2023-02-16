@@ -11,6 +11,43 @@ use crate::util::{InputTup, multi_thread_process_list, get_percent, reduce};
 pub type WordBag = (usize, HashMap<String, f32>);
 pub type BagMap = HashMap<String, WordBag>;
 
+pub struct PruneProbabilityConfig {
+    // Starts at this probability
+    pub starting_probability: f32,
+    // Will not reduce accuracy beyond the original accuracy - this number
+    pub max_accuracy_reduction: f32,
+    // Will multiply the minimum probability by this number every iteration
+    pub probability_multiplyer: f32,
+}
+
+pub struct PruneSimilarityConfig {
+    // Starts at this deviation
+    pub starting_deviation: f32,
+    // Will not reduce accuracy beyond the original accuracy - this number
+    pub max_accuracy_reduction: f32,
+    // Will multiply the minimum probability by this number every iteration
+    pub probability_multiplyer: f32
+}
+
+#[derive(Clone)]
+pub struct RandomizerConfig {
+    pub num_params: i32,
+    pub step_size: f32,
+    pub iterations: i32
+}
+
+// impl Clone for RandomizerConfig {
+//     clone() {
+
+//     }
+// }
+
+pub struct LearnConfig {
+    pub prune_probability: PruneProbabilityConfig,
+    pub prune_similarity: PruneSimilarityConfig,
+    pub randomizer: RandomizerConfig
+}
+
 pub struct BagOfWords {
     pub bags: BagMap
 }
@@ -206,7 +243,7 @@ impl BagOfWords {
     }
 
     // TODO: decrease probability until there are no removed words, then increase
-    fn prune_probability(&self, input: &Vec<InputTup>, o_initial_accuracy: Option<f32>) -> (f32, BagMap) {
+    fn prune_probability(&self, input: &Vec<InputTup>, o_initial_accuracy: Option<f32>, config: PruneProbabilityConfig) -> (f32, BagMap) {
         println!("\n\n\nOptimizing by minimum probability");
         println!("Testing accuracy...");
         let initial_accuracy = if o_initial_accuracy.is_none()
@@ -215,7 +252,7 @@ impl BagOfWords {
 
         println!("Accuracy: {}%", f32::ceil(initial_accuracy * 100 as f32));
 
-        let mut min_prob = 0.00001;
+        let mut min_prob = config.starting_probability;
         let mut current_accuracy: f32 = 0 as f32;
         let mut last_accuracy: f32;
         let mut ret_bags = self.bags.clone();
@@ -238,12 +275,12 @@ impl BagOfWords {
             println!("\nTesting accuracy...");
             current_accuracy = BagOfWords::test(&tmp_bags, input);
             println!("Accuracy: {}%", get_percent(&current_accuracy));
-            if current_accuracy > initial_accuracy - 0.1  as f32 {
+            if current_accuracy > initial_accuracy - config.max_accuracy_reduction  as f32 {
                 println!("\nAccuracy target met!");
                 ret_bags = tmp_bags;
-                min_prob = min_prob * 2 as f32;
+                min_prob = min_prob * config.probability_multiplyer;
             } else {
-                min_prob = min_prob / 2 as f32;
+                min_prob = min_prob / config.probability_multiplyer;
                 break;
             }
         }
@@ -315,9 +352,9 @@ impl BagOfWords {
         ret_bags
     }
 
-    fn prune_similarity_loop(&self, input: &Vec<InputTup>, o_initial_accuracy: Option<f32>) -> (f32, BagMap) {
+    fn prune_similarity_loop(&self, input: &Vec<InputTup>, o_initial_accuracy: Option<f32>, config: PruneSimilarityConfig) -> (f32, BagMap) {
         println!("\n\n\nOptimizing by maximum deviation");
-        let mut max_deviation = 0.00000001;
+        let mut max_deviation = config.starting_deviation;
         let mut last_accuracy: f32;
         println!("Testing Accuracy...");
         let initial_accuracy = if o_initial_accuracy.is_none()
@@ -337,21 +374,21 @@ impl BagOfWords {
             println!("\nTesting Accuracy...");
             new_accuracy = BagOfWords::test(&tmp_bags, input);
             println!("Accuracy: {}%", get_percent(&new_accuracy));
-            if new_accuracy < initial_accuracy - 0.1 as f32 && !found_low {
+            if new_accuracy < initial_accuracy - config.max_accuracy_reduction as f32 && !found_low {
                 println!("Still finding minimum deviation");
-                max_deviation = max_deviation / 2 as f32;
+                max_deviation = max_deviation / config.probability_multiplyer;
                 continue;
             }
 
-            if new_accuracy > initial_accuracy - 0.1 as f32 && !found_low {
+            if new_accuracy > initial_accuracy - config.max_accuracy_reduction as f32 && !found_low {
                 found_low = true;
             }
 
-            if new_accuracy > initial_accuracy - 0.1 as f32 {
-                max_deviation = max_deviation * 2 as f32;
+            if new_accuracy > initial_accuracy - config.max_accuracy_reduction {
+                max_deviation = max_deviation * config.probability_multiplyer;
                 ret_bags = tmp_bags;
             } else {
-                max_deviation = max_deviation / 2 as f32;
+                max_deviation = max_deviation / config.probability_multiplyer;
                 break;
             }
         }
@@ -360,11 +397,11 @@ impl BagOfWords {
         (last_accuracy, ret_bags)
     }
 
-    fn randomize_inputs(bags: BagMap, words: &Vec<String>) -> BagMap {
+    fn randomize_inputs(bags: BagMap, words: &Vec<String>, config: RandomizerConfig) -> BagMap {
         // let timer = Instant::now();
         let mut rng = rand::thread_rng();
-        let num_params = 1;
-        let step_size = 0.001;
+        let num_params = config.num_params;
+        let step_size = config.step_size;
         
         let word_length = words.len();
         let mut random_words: Vec<String> = Vec::new();
@@ -390,7 +427,7 @@ impl BagOfWords {
         ret_bags
     }
 
-    fn learn_randomizer_loop(&self, input: &Vec<InputTup>, iterations: i32, o_initial_accuracy: Option<f32>) -> (f32, BagMap) {
+    fn learn_randomizer_loop(&self, input: &Vec<InputTup>, o_initial_accuracy: Option<f32>, config: RandomizerConfig) -> (f32, BagMap) {
         println!("\n\n\nStarting randomizer");
         println!("\nTesting Accuracy...");
         let initial_accuracy = if o_initial_accuracy.is_none()
@@ -401,19 +438,19 @@ impl BagOfWords {
         let mut ret_bags = self.bags.clone();
         let mut improve_timer = Instant::now();
         let mut last_improvement_iterations = 0;
-        for i in 0..iterations {
+        for i in 0..config.iterations {
             if i % 100 == 0 {
                 println!("{} iterations", i);
             }
-            let f_thread = |((input_ctx, words), bags_ctx): ((Vec<InputTup>, Vec<String>), BagMap), _: &Vec<i32>| -> Vec<(f32, BagMap)> {
-                let new_bags = BagOfWords::randomize_inputs(bags_ctx, &words);
+            let f_thread = |((input_ctx, words, config), bags_ctx): ((Vec<InputTup>, Vec<String>, RandomizerConfig), BagMap), _: &Vec<i32>| -> Vec<(f32, BagMap)> {
+                let new_bags = BagOfWords::randomize_inputs(bags_ctx, &words, config);
                 let new_accuracy = BagOfWords::test(&new_bags, &input_ctx);
                 vec![(new_accuracy, new_bags)]
             };
             
-            let iter_list = 0..iterations;
+            let iter_list = 0..config.iterations;
             let words = BagOfWords::get_words_in_bags(&self.bags);
-            let ret_vec = multi_thread_process_list(&iter_list.collect_vec(), ((input.clone(), words), ret_bags.clone()), 12, f_thread, None);
+            let ret_vec = multi_thread_process_list(&iter_list.collect_vec(), ((input.clone(), words, config.clone()), ret_bags.clone()), 12, f_thread, None);
             for (new_accuracy, new_bags) in ret_vec {
                 if new_accuracy > current_accuracy {
                     println!("Accuracy: {}%", get_percent(&new_accuracy));
@@ -432,17 +469,40 @@ impl BagOfWords {
     }
 
     // , step_size: f32, num_iterations: i32, modify_amount: i32
-    pub fn learn(&mut self, input: &Vec<InputTup>) {
+    pub fn learn(&mut self, input: &Vec<InputTup>, o_learn_config: Option<LearnConfig>) {
+        let learn_config: LearnConfig;
+        if o_learn_config.is_some() {
+            learn_config = o_learn_config.expect("Unwrap error");
+        } else {
+            learn_config = LearnConfig {
+                prune_probability: PruneProbabilityConfig {
+                    starting_probability: 0.00001,
+                    max_accuracy_reduction: 0.1,
+                    probability_multiplyer: 2.0
+                },
+                prune_similarity: PruneSimilarityConfig { 
+                    starting_deviation: 0.00000001, 
+                    max_accuracy_reduction: 0.1, 
+                    probability_multiplyer: 2.0
+                },
+                randomizer: RandomizerConfig { 
+                    num_params: 10, 
+                    step_size: 0.001,
+                    iterations: 1000
+                }
+            }
+        }
+
         println!("\nRunning learning procedure");
         println!("Num inputs: {}", input.len());
         // find minimum probability for words that still make the outcome reasonably accurate
-        let (accuracy, bags) = self.prune_similarity_loop(&input, None);
+        let (accuracy, bags) = self.prune_similarity_loop(&input, None, learn_config.prune_similarity);
         self.bags = bags;
         
-        let (accuracy, bags) = self.prune_probability(&input, Some(accuracy));
+        let (_, bags) = self.prune_probability(&input, Some(accuracy), learn_config.prune_probability);
         self.bags = bags;
 
-        // let (_, bags) = self.learn_randomizer_loop(input, 1000, None);
-        // self.bags = bags;
+        let (_, bags) = self.learn_randomizer_loop(input, None, learn_config.randomizer);        
+        self.bags = bags;
     }
 }

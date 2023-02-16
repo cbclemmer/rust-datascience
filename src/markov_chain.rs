@@ -13,23 +13,24 @@ pub struct MarkovChain {
 }
 
 impl MarkovChain {
-    fn feed(mut totals: StateTotals, from_state: String, to_state: String) -> StateTotals {
-        let o_from_map = totals.get(&from_state);
+    fn feed(totals: &mut StateTotals, from_state: &String, to_state: &String) {
+        let o_from_map = totals.get(from_state);
+        let from_state_c = from_state.clone();
+        let to_state_c = to_state.clone();
         if o_from_map.is_some() {
             let mut current_total = 0;
             let mut to_map = o_from_map.expect("map err").clone();
-            let o_total = to_map.get(&to_state);
+            let o_total = to_map.get(to_state);
             if o_total.is_some() {
                 current_total = o_total.expect("map err").clone();
             }
-            to_map.insert(to_state, current_total + 1);
-            totals.insert(from_state, to_map);
+            to_map.insert(to_state_c, current_total + 1);
+            totals.insert(from_state_c, to_map);
         } else {
             let mut to_map = HashMap::new();
-            to_map.insert(to_state, 1);
-            totals.insert(from_state, to_map);
+            to_map.insert(to_state_c, 1);
+            totals.insert(from_state_c, to_map);
         }
-        totals
     }
 
     fn calculate_states(totals: StateTotals) -> StateMap {
@@ -52,20 +53,18 @@ impl MarkovChain {
     pub fn train(input_data: Vec<InputTup>) -> StateMap {
         let mut totals = StateTotals::new();
 
-        let f_thread = |_, chunk: Vec<InputTup>| -> Vec<StateTotals> {
+        let f_thread = |_, chunk: &Vec<InputTup>| -> Vec<StateTotals> {
             let mut totals = StateTotals::new();
             for (from_state, to_state) in chunk {
-                totals = MarkovChain::feed(totals.clone(), from_state, to_state);
+                MarkovChain::feed(&mut totals, from_state, to_state);
             }
             let mut ret_val = Vec::new();
             ret_val.push(totals);
             ret_val
         };
 
-        let f_return = |_, _, _| { };
-
         let start1 = Instant::now();
-        let results = multi_thread_process_list(input_data, 0, 16, f_thread, f_return);
+        let results = multi_thread_process_list(&input_data, 0, 16, f_thread, None);
         println!("Feed: {:?}", start1.elapsed());
 
         let start2 = Instant::now();

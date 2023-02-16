@@ -1,9 +1,10 @@
 use itertools::Itertools;
-use std::{collections::HashMap, ops::Index};
+use std::{collections::HashMap, ops::Index, io::{Write, Read}};
 use rand::Rng;
-use std::time::{Instant, Duration};
+use std::time::Instant;
+use std::fs::File;
 
-use crate::util::{InputTup, multi_thread_process_list, get_percent};
+use crate::util::{InputTup, multi_thread_process_list, get_percent, reduce};
 
 // (total num words, word -> probability)
 // probability = num times word appears / total num words
@@ -129,6 +130,79 @@ impl BagOfWords {
         let num_correct = results.into_iter().filter(|b| *b).collect_vec().len() as i32;
         
         num_correct as f32 / num_inputs as f32
+    }
+
+    pub fn save(&self, file_name: &str) {
+        let mut file_data = String::from("");
+        for (bag_name, (total, bag)) in self.bags.clone() {
+            // Positive,123|
+            file_data = file_data + &bag_name + "," + &total.to_string() + "|";
+            let bag_vec = bag.into_iter().collect_vec();
+            let bag_string = reduce::<(String, f32), String>(&bag_vec, &String::from(""), |(word, prob), acc| {
+                // "foo"0.123"bar"0.234
+                acc + "\"" + word + "\"" + &prob.to_string()
+            });
+            file_data = file_data + &bag_string + "\n"
+        }
+        let mut file = File::create(file_name).expect("Creating object file error");
+        file.write_all(file_data.as_bytes()).expect("Writing file error");
+    }
+
+    pub fn load(file_name: &str) -> BagOfWords {
+        let mut file = File::open(file_name).expect("Creating file object error");
+        let mut file_contents = String::new();
+        file.read_to_string(&mut file_contents).expect("Reading file error");
+        if file_contents.eq("") { panic!("Loading bag of words: File empty") }
+        let bags = file_contents.split("\n");
+        let mut bm = BagMap::new();
+        for bag in bags {
+            if bag.eq("") { continue; }
+            let mut bag_name = String::new();
+            let mut bag_total_s = String::new();
+            
+            let mut words: HashMap<String, f32> = HashMap::new();
+            let mut current_word = String::new();
+            let mut current_prob = String::new();
+
+            let mut found_bag_name = false;
+            let mut found_bag_total = false;
+            let mut finding_word = false;
+            for c in bag.chars() {
+                if !found_bag_name {
+                    if c == ',' {
+                        found_bag_name = true;
+                        continue;
+                    }
+                    bag_name = bag_name + &c.to_string();
+                    continue;
+                }
+                if !found_bag_total {
+                    if c == '|' {
+                        found_bag_total = true;
+                        continue;
+                    }
+                    bag_total_s = bag_total_s + &c.to_string();
+                    continue;
+                }
+                if c == '\"' {
+                    if !finding_word && !current_prob.eq("") {
+                        words.insert(current_word.clone(), current_prob.clone().parse::<f32>().unwrap());
+                        current_word = String::new();
+                        current_prob = String::new();
+                    }
+                    finding_word = !finding_word;
+                    continue;
+                }
+                if finding_word {
+                    current_word = current_word + &c.to_string();
+                } else {
+                    current_prob = current_prob + &c.to_string();
+                }
+            }
+            let bag_total = bag_total_s.parse::<usize>().unwrap();
+            bm.insert(bag_name, (bag_total, words));
+        }
+        BagOfWords { bags: bm }
     }
 
     // TODO: decrease probability until there are no removed words, then increase
@@ -289,8 +363,8 @@ impl BagOfWords {
     fn randomize_inputs(bags: BagMap, words: &Vec<String>) -> BagMap {
         // let timer = Instant::now();
         let mut rng = rand::thread_rng();
-        let num_params = 10;
-        let step_size = 0.01;
+        let num_params = 1;
+        let step_size = 0.001;
         
         let word_length = words.len();
         let mut random_words: Vec<String> = Vec::new();
@@ -342,7 +416,7 @@ impl BagOfWords {
             let ret_vec = multi_thread_process_list(&iter_list.collect_vec(), ((input.clone(), words), ret_bags.clone()), 12, f_thread, None);
             for (new_accuracy, new_bags) in ret_vec {
                 if new_accuracy > current_accuracy {
-                    println!("Accuracy: {}", get_percent(&new_accuracy));
+                    println!("Accuracy: {}%", get_percent(&new_accuracy));
                     println!("Time taken: {:?}", improve_timer.elapsed());
                     println!("Iterations needed: {}", last_improvement_iterations);
                     last_improvement_iterations = 0;
@@ -358,17 +432,17 @@ impl BagOfWords {
     }
 
     // , step_size: f32, num_iterations: i32, modify_amount: i32
-    pub fn learn(mut self, input: &Vec<InputTup>) {
+    pub fn learn(&mut self, input: &Vec<InputTup>) {
         println!("\nRunning learning procedure");
         println!("Num inputs: {}", input.len());
         // find minimum probability for words that still make the outcome reasonably accurate
-        // let (accuracy, bags) = self.prune_similarity_loop(&input, None);
-        // self.bags = bags;
-        
-        // let (accuracy, bags) = self.prune_probability(&input, Some(accuracy));
-        // self.bags = bags;
-
-        let (_, bags) = self.learn_randomizer_loop(input, 1000, None);
+        let (accuracy, bags) = self.prune_similarity_loop(&input, None);
         self.bags = bags;
+        
+        let (accuracy, bags) = self.prune_probability(&input, Some(accuracy));
+        self.bags = bags;
+
+        // let (_, bags) = self.learn_randomizer_loop(input, 1000, None);
+        // self.bags = bags;
     }
 }

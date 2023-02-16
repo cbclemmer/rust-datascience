@@ -130,3 +130,11 @@ pub fn get_markov_data(text_file: String, stop_word_file: &String) -> Vec<InputT
 pub fn get_percent(prob: &f32) -> f32 { 
     f32::ceil(prob * 10000 as f32) / 100 as f32 
 }
+
+pub fn reduce<VT, RT>(list: &Vec<VT>, initial: &RT, f: fn(&VT, RT) -> RT) -> RT where RT: Clone {
+    let mut ret_val = initial.to_owned();
+    for item in list {
+        ret_val = f(item, ret_val);
+    }
+    ret_val
+}

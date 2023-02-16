@@ -69,18 +69,32 @@ use lib::util::{get_input_data_csv, get_markov_data, multi_thread_process_list};
 //     println!("Final result: {}%", result * 100.0)
 // }
 
-fn main() {
-    // validate_bow()
-    // validate_mc();
+fn write() {
     println!("Getting training data");
     
     let stop_word_file = String::from("data/stop_words.txt");
     let training_data = get_input_data_csv(String::from("data/twitter_training.csv"), &stop_word_file);
     println!("Training data");
-    let bow = BagOfWords::new(&training_data);
+    let mut bow = BagOfWords::new(&training_data);
     
     println!("Getting validation data");
     let validation_data = get_input_data_csv(String::from("data/twitter_validation.csv"), &stop_word_file);
     
-    bow.learn(&validation_data);
+    // bow.learn(&validation_data);
+    bow.save("data/bow.dat")
+}
+
+fn read() {
+    let bow = BagOfWords::load("data/bow.dat");
+    let stop_word_file = String::from("data/stop_words.txt");
+    let validation_data = get_input_data_csv(String::from("data/twitter_validation.csv"), &stop_word_file);
+    let accuracy = BagOfWords::test(&bow.bags, &validation_data);
+    println!("Accuracy: {}", accuracy);
+}
+
+fn main() {
+    // validate_bow()
+    // validate_mc();
+    write();
+    read();
 }

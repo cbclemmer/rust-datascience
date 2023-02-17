@@ -29,6 +29,11 @@ pub struct PruneSimilarityConfig {
     pub probability_multiplyer: f32
 }
 
+pub struct PruneCountConfig {
+    pub min_count: i32,
+    pub adjust_amount: f32
+}
+
 #[derive(Clone)]
 pub struct RandomizerConfig {
     pub num_params: i32,
@@ -36,16 +41,11 @@ pub struct RandomizerConfig {
     pub iterations: i32
 }
 
-// impl Clone for RandomizerConfig {
-//     clone() {
-
-//     }
-// }
-
 pub struct LearnConfig {
     pub prune_probability: PruneProbabilityConfig,
     pub prune_similarity: PruneSimilarityConfig,
-    pub randomizer: RandomizerConfig
+    pub prune_count: PruneCountConfig,
+    pub randomizer: RandomizerConfig,
 }
 
 pub struct BagOfWords {
@@ -397,6 +397,25 @@ impl BagOfWords {
         (last_accuracy, ret_bags)
     }
 
+    fn prune_count(&self, config: &PruneCountConfig) -> BagMap {
+        let mut ret_bags = self.bags.clone();
+        let mut removed_words = Vec::new();
+        for (bag_name, (total, bag)) in &self.bags {
+            let mut bag_copy = bag.clone();
+            for (word, prob) in bag {
+                let count = (*prob * *total as f32) + config.adjust_amount;
+                if count <= config.min_count as f32 {
+                    bag_copy.remove(word);
+                    removed_words.push(word);
+                }
+            }
+            ret_bags.insert(bag_name.clone(), (total.clone(), bag_copy));
+        }
+        removed_words.dedup();
+        println!("Pruned by count, removed {} words", removed_words.len());
+        ret_bags
+    }
+
     fn randomize_inputs(bags: BagMap, words: &Vec<String>, config: RandomizerConfig) -> BagMap {
         // let timer = Instant::now();
         let mut rng = rand::thread_rng();
@@ -489,6 +508,10 @@ impl BagOfWords {
                     num_params: 10, 
                     step_size: 0.001,
                     iterations: 1000
+                },
+                prune_count: PruneCountConfig { 
+                    min_count: 2,
+                    adjust_amount: 0.01
                 }
             }
         }
@@ -496,13 +519,16 @@ impl BagOfWords {
         println!("\nRunning learning procedure");
         println!("Num inputs: {}", input.len());
         // find minimum probability for words that still make the outcome reasonably accurate
-        let (accuracy, bags) = self.prune_similarity_loop(&input, None, learn_config.prune_similarity);
-        self.bags = bags;
+        // let (accuracy, bags) = self.prune_similarity_loop(&input, None, learn_config.prune_similarity);
+        // self.bags = bags;
         
-        let (_, bags) = self.prune_probability(&input, Some(accuracy), learn_config.prune_probability);
-        self.bags = bags;
+        // let (_, bags) = self.prune_probability(&input, Some(accuracy), learn_config.prune_probability);
+        // self.bags = bags;
 
-        let (_, bags) = self.learn_randomizer_loop(input, None, learn_config.randomizer);        
-        self.bags = bags;
+        // let (_, bags) = self.learn_randomizer_loop(input, None, learn_config.randomizer);        
+        // self.bags = bags;
+
+        self.bags = self.prune_count(&learn_config.prune_count);
+
     }
 }

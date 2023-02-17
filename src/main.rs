@@ -80,7 +80,9 @@ fn write() {
     println!("Getting validation data");
     let validation_data = get_input_data_csv(String::from("data/twitter_validation.csv"), &stop_word_file);
     
-    // bow.learn(&validation_data);
+    bow.learn(&validation_data, None);
+    let prob = BagOfWords::test(&bow.bags, &validation_data);
+    println!("Accuracy: {}", prob * 100 as f32);
     bow.save("data/bow.dat")
 }
 
@@ -96,5 +98,5 @@ fn main() {
     // validate_bow()
     // validate_mc();
     write();
-    read();
+    // read();
 }

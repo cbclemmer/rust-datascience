@@ -83,7 +83,7 @@ fn write() {
     bow.learn(&validation_data, None);
     let prob = BagOfWords::test(&bow.bags, &validation_data);
     println!("Accuracy: {}", prob * 100 as f32);
-    bow.save("data/bow.dat")
+    // bow.save("data/bow.dat")
 }
 
 fn read() {

@@ -41,11 +41,19 @@ pub struct RandomizerConfig {
     pub iterations: i32
 }
 
+pub struct PruneSelectionConfig {
+    pub probability: bool,
+    pub similarity: bool,
+    pub count: bool,
+    pub randomizer: bool
+}
+
 pub struct LearnConfig {
-    pub prune_probability: PruneProbabilityConfig,
-    pub prune_similarity: PruneSimilarityConfig,
-    pub prune_count: PruneCountConfig,
-    pub randomizer: RandomizerConfig,
+    pub prune_selection: PruneSelectionConfig,
+    pub prune_probability: Option<PruneProbabilityConfig>,
+    pub prune_similarity: Option<PruneSimilarityConfig>,
+    pub prune_count: Option<PruneCountConfig>,
+    pub randomizer: Option<RandomizerConfig>,
 }
 
 pub struct BagOfWords {
@@ -243,7 +251,7 @@ impl BagOfWords {
     }
 
     // TODO: decrease probability until there are no removed words, then increase
-    fn prune_probability(&self, input: &Vec<InputTup>, o_initial_accuracy: Option<f32>, config: PruneProbabilityConfig) -> (f32, BagMap) {
+    fn prune_probability(&self, input: &Vec<InputTup>, o_initial_accuracy: &Option<f32>, config: PruneProbabilityConfig) -> (f32, BagMap) {
         println!("\n\n\nOptimizing by minimum probability");
         println!("Testing accuracy...");
         let initial_accuracy = if o_initial_accuracy.is_none()
@@ -352,7 +360,7 @@ impl BagOfWords {
         ret_bags
     }
 
-    fn prune_similarity_loop(&self, input: &Vec<InputTup>, o_initial_accuracy: Option<f32>, config: PruneSimilarityConfig) -> (f32, BagMap) {
+    fn prune_similarity_loop(&self, input: &Vec<InputTup>, o_initial_accuracy: &Option<f32>, config: PruneSimilarityConfig) -> (f32, BagMap) {
         println!("\n\n\nOptimizing by maximum deviation");
         let mut max_deviation = config.starting_deviation;
         let mut last_accuracy: f32;
@@ -413,6 +421,8 @@ impl BagOfWords {
         }
         removed_words.dedup();
         println!("Pruned by count, removed {} words", removed_words.len());
+        let word_count = BagOfWords::get_words_in_bags(&ret_bags).len();
+        println!("Words left: {}", word_count);
         ret_bags
     }
 
@@ -446,7 +456,7 @@ impl BagOfWords {
         ret_bags
     }
 
-    fn learn_randomizer_loop(&self, input: &Vec<InputTup>, o_initial_accuracy: Option<f32>, config: RandomizerConfig) -> (f32, BagMap) {
+    fn learn_randomizer_loop(&self, input: &Vec<InputTup>, o_initial_accuracy: &Option<f32>, config: RandomizerConfig) -> (f32, BagMap) {
         println!("\n\n\nStarting randomizer");
         println!("\nTesting Accuracy...");
         let initial_accuracy = if o_initial_accuracy.is_none()
@@ -489,46 +499,83 @@ impl BagOfWords {
 
     // , step_size: f32, num_iterations: i32, modify_amount: i32
     pub fn learn(&mut self, input: &Vec<InputTup>, o_learn_config: Option<LearnConfig>) {
-        let learn_config: LearnConfig;
+        let mut learn_config: LearnConfig;
+        let default_probability_config = PruneProbabilityConfig {
+            starting_probability: 0.00001,
+            max_accuracy_reduction: 0.1,
+            probability_multiplyer: 2.0
+        };
+
+        let default_similarity_config = PruneSimilarityConfig { 
+            starting_deviation: 0.00000001, 
+            max_accuracy_reduction: 0.1, 
+            probability_multiplyer: 2.0
+        };
+
+        let default_randomizer_config = RandomizerConfig { 
+            num_params: 10, 
+            step_size: 0.001,
+            iterations: 1000
+        };
+
+        let default_count_config = PruneCountConfig { 
+            min_count: 2,
+            adjust_amount: 0.01
+        };
+
         if o_learn_config.is_some() {
             learn_config = o_learn_config.expect("Unwrap error");
+            if learn_config.prune_probability.is_none() {
+                learn_config.prune_probability = Some(default_probability_config);
+            }
+            if learn_config.prune_similarity.is_none() {
+                learn_config.prune_similarity = Some(default_similarity_config);
+            }
+            if learn_config.randomizer.is_none() {
+                learn_config.randomizer = Some(default_randomizer_config);
+            }
+            if learn_config.prune_count.is_none() {
+                learn_config.prune_count = Some(default_count_config);
+            }
         } else {
             learn_config = LearnConfig {
-                prune_probability: PruneProbabilityConfig {
-                    starting_probability: 0.00001,
-                    max_accuracy_reduction: 0.1,
-                    probability_multiplyer: 2.0
-                },
-                prune_similarity: PruneSimilarityConfig { 
-                    starting_deviation: 0.00000001, 
-                    max_accuracy_reduction: 0.1, 
-                    probability_multiplyer: 2.0
-                },
-                randomizer: RandomizerConfig { 
-                    num_params: 10, 
-                    step_size: 0.001,
-                    iterations: 1000
-                },
-                prune_count: PruneCountConfig { 
-                    min_count: 2,
-                    adjust_amount: 0.01
+                prune_probability: Some(default_probability_config),
+                prune_similarity: Some(default_similarity_config),
+                randomizer: Some(default_randomizer_config),
+                prune_count: Some(default_count_config),
+                prune_selection: PruneSelectionConfig {
+                    probability: false,
+                    similarity: false,
+                    count: false,
+                    randomizer: false
                 }
             }
         }
 
         println!("\nRunning learning procedure");
         println!("Num inputs: {}", input.len());
-        // find minimum probability for words that still make the outcome reasonably accurate
-        // let (accuracy, bags) = self.prune_similarity_loop(&input, None, learn_config.prune_similarity);
-        // self.bags = bags;
         
-        // let (_, bags) = self.prune_probability(&input, Some(accuracy), learn_config.prune_probability);
-        // self.bags = bags;
+        // find minimum probability for words that still make the outcome reasonably accurate
+        let mut accuracy = None;
+        if learn_config.prune_selection.similarity {
+            let (tmp_accuracy, bags) = self.prune_similarity_loop(&input, &accuracy, learn_config.prune_similarity.expect("config err"));
+            accuracy = Some(tmp_accuracy);
+            self.bags = bags;
+        }
+        
+        if learn_config.prune_selection.probability {
+            let (tmp_accuracy, bags) = self.prune_probability(&input, &accuracy, learn_config.prune_probability.expect("config err"));
+            accuracy = Some(tmp_accuracy);
+            self.bags = bags;
+        }
 
-        // let (_, bags) = self.learn_randomizer_loop(input, None, learn_config.randomizer);        
-        // self.bags = bags;
+        if learn_config.prune_selection.probability {
+            let (_, bags) = self.learn_randomizer_loop(input, &accuracy, learn_config.randomizer.expect("config err"));
+            self.bags = bags;
+        }
 
-        self.bags = self.prune_count(&learn_config.prune_count);
-
+        if learn_config.prune_selection.count {
+            self.bags = self.prune_count(&learn_config.prune_count.expect("config err"));
+        }
     }
 }

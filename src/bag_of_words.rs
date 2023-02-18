@@ -266,7 +266,7 @@ impl BagOfWords {
         BagOfWords::test_sentence_static(&self.bags, sentence)
     }
 
-    pub fn test(bags: &BagMap, input: &Vec<InputTup>) -> f32 {
+    pub fn validate(bags: &BagMap, input: &Vec<InputTup>) -> f32 {
         let num_inputs = input.len();
         let f_thread = |ctx: BagMap, chunk: &Vec<(String, String)>| -> Vec<bool> {
             let mut correct_vec = Vec::new();
@@ -445,7 +445,7 @@ impl BagOfWords {
         println!("\n\n\nOptimizing by minimum probability");
         println!("Testing accuracy...");
         let initial_accuracy = if o_initial_accuracy.is_none()
-            { BagOfWords::test(&self.bags, input) }
+            { BagOfWords::validate(&self.bags, input) }
             else { o_initial_accuracy.expect("ERR") };
 
         println!("Accuracy: {}%", f32::ceil(initial_accuracy * 100 as f32));
@@ -471,7 +471,7 @@ impl BagOfWords {
             println!("Removed Words: {}", removed_words);
             last_accuracy = current_accuracy;
             println!("\nTesting accuracy...");
-            current_accuracy = BagOfWords::test(&tmp_bags, input);
+            current_accuracy = BagOfWords::validate(&tmp_bags, input);
             println!("Accuracy: {}%", get_percent(&current_accuracy));
             if current_accuracy > initial_accuracy - config.max_accuracy_reduction  as f32 {
                 println!("\nAccuracy target met!");
@@ -556,7 +556,7 @@ impl BagOfWords {
         let mut last_accuracy: f32;
         println!("Testing Accuracy...");
         let initial_accuracy = if o_initial_accuracy.is_none()
-            { BagOfWords::test(&self.bags, input) }
+            { BagOfWords::validate(&self.bags, input) }
             else { o_initial_accuracy.expect("ERR") };
 
         let mut new_accuracy = initial_accuracy;
@@ -570,7 +570,7 @@ impl BagOfWords {
             last_accuracy = new_accuracy;
 
             println!("\nTesting Accuracy...");
-            new_accuracy = BagOfWords::test(&tmp_bags, input);
+            new_accuracy = BagOfWords::validate(&tmp_bags, input);
             println!("Accuracy: {}%", get_percent(&new_accuracy));
             if new_accuracy < initial_accuracy - config.max_accuracy_reduction as f32 && !found_low {
                 println!("Still finding minimum deviation");
@@ -650,7 +650,7 @@ impl BagOfWords {
         println!("\n\n\nStarting randomizer");
         println!("\nTesting Accuracy...");
         let initial_accuracy = if o_initial_accuracy.is_none()
-            { BagOfWords::test(&self.bags, input) }
+            { BagOfWords::validate(&self.bags, input) }
             else { o_initial_accuracy.expect("ERR") };
         
         let mut current_accuracy = initial_accuracy;
@@ -663,7 +663,7 @@ impl BagOfWords {
             }
             let f_thread = |((input_ctx, words, config), bags_ctx): ((Vec<InputTup>, Vec<String>, RandomizerConfig), BagMap), _: &Vec<i32>| -> Vec<(f32, BagMap)> {
                 let new_bags = BagOfWords::randomize_inputs(bags_ctx, &words, config);
-                let new_accuracy = BagOfWords::test(&new_bags, &input_ctx);
+                let new_accuracy = BagOfWords::validate(&new_bags, &input_ctx);
                 vec![(new_accuracy, new_bags)]
             };
             

@@ -1,0 +1,4 @@
+Find all articles for each property
+Train bag of words for each property
+Analyze properties that are more likely to go together and find a heirarchy to start from
+Sum probabilities for heirachy and determine most likely set of properties for a given statement

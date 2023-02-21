@@ -55,11 +55,12 @@ impl BagOfWords {
     }
 
     pub fn new(input_data: &Vec<InputTup>) -> BagOfWords {
-        let bow = BagOfWords { bags: BagMap::new() };
-        bow.train(input_data)
+        let mut bow = BagOfWords { bags: BagMap::new() };
+        bow.train(input_data);
+        bow
     }
     
-    pub fn train(mut self, input_data: &Vec<InputTup>) -> BagOfWords {
+    pub fn train(&mut self, input_data: &Vec<InputTup>) {
         let input_groups = input_data.iter()
             .filter(|tup| tup.0 != "")
             .sorted_by(|tup1, tup2| tup1.0.cmp(&tup2.0))
@@ -69,8 +70,6 @@ impl BagOfWords {
             let wv_input = group.map(|tup| tup.1.to_owned()).collect_vec();
             self.train_word_vector(&key, &wv_input);
         }
-        
-        self
     }
 
     fn test_word(bow: &BagMap, word: &String) -> String {

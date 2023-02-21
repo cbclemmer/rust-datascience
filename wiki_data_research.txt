@@ -2,3 +2,9 @@ Find all articles for each property
 Train bag of words for each property
 Analyze properties that are more likely to go together and find a heirarchy to start from
 Sum probabilities for heirachy and determine most likely set of properties for a given statement
+
+learn net:
+given a list of input objects
+each object has a file to parse, an executable to run, and a output file to save
+will give each computer on the network a task of running one of these objects
+the resulting files will then be sent back to the server and put in an output directory

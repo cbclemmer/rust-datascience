@@ -6,9 +6,10 @@ use crate::n_gram::*;
 impl NGram {
     pub fn save(&self, file_name: &str) {
         let mut file_data = String::from("");
+        file_data = file_data + &self.num_grams.to_string() + "\n";
         for (bag_name, (total, bag)) in self.bags.clone() {
             // Positive,2,123|
-            file_data = file_data + &bag_name + "," + &self.num_grams.to_string() + &total.to_string() + "|";
+            file_data = file_data + &bag_name + "," + &total.to_string() + "|";
             let bag_vec = bag.into_iter().collect_vec();
             let bag_string = reduce::<(String, f32), String>(&bag_vec, &String::from(""), |(word, prob), acc| {
                 // "foo"0.123"bar"0.234
@@ -24,14 +25,19 @@ impl NGram {
         let mut file = File::open(file_name).expect("Creating file object error");
         let mut file_contents = String::new();
         file.read_to_string(&mut file_contents).expect("Reading file error");
-        if file_contents.eq("") { panic!("Loading bag of words: File empty") }
+        if file_contents.eq("") { panic!("Loading n-gram model: File empty") }
         let bags = file_contents.split("\n");
         let mut bm = BagMap::new();
         let mut num_grams: i8 = 0;
+        let mut first = true;
         for bag in bags {
             if bag.eq("") { continue; }
+            if first {
+                num_grams = bag.parse::<i8>().unwrap();
+                first = false;
+                continue;
+            }
             let mut bag_name = String::new();
-            let mut num_grams_s = String::new();
             let mut bag_total_s = String::new();
             
             let mut words: HashMap<String, f32> = HashMap::new();
@@ -39,7 +45,6 @@ impl NGram {
             let mut current_prob = String::new();
 
             let mut found_bag_name = false;
-            let mut found_num_grams = false;
             let mut found_bag_total = false;
             let mut finding_word = false;
             for c in bag.chars() {
@@ -50,12 +55,6 @@ impl NGram {
                     }
                     bag_name = bag_name + &c.to_string();
                     continue;
-                }
-                if !found_num_grams {
-                    if c == ',' {
-                        found_num_grams = true;
-                    }
-                    num_grams_s = num_grams_s + &c.to_string();
                 }
                 if !found_bag_total {
                     if c == '|' {
@@ -82,8 +81,22 @@ impl NGram {
             }
             let bag_total = bag_total_s.parse::<usize>().unwrap();
             bm.insert(bag_name, (bag_total, words));
-            num_grams = num_grams_s.parse::<i8>().unwrap();
         }
         NGram { bags: bm, num_grams }
+    }
+
+    pub fn parse(ngram_file_path: &str, input_file_path: &str, output_file_path: &str) {
+        let ngram = NGram::load(ngram_file_path);
+
+        let mut input_file = File::open(input_file_path).expect("Creating file object error");
+        let mut input_file_contents = String::new();
+        input_file.read_to_string(&mut input_file_contents).expect("Reading file error");
+        if input_file_contents.eq("") { panic!("Loading bag of words: File empty") }
+
+        let mut output_file = File::create(output_file_path).expect("Error creating output file");
+        for line in input_file_contents.split("\n") {
+            let res = ngram.test_sentence(&String::from(line));
+            output_file.write((res + "\n").as_bytes()).expect("Error writing result to file");
+        }
     }
 }

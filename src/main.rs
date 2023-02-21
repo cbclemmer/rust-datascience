@@ -49,20 +49,25 @@ fn write() {
     bow.learn(&validation_data, Some(bow_config));
     let prob = NGram::validate(&bow.bags, bow.num_grams, &validation_data);
     println!("Accuracy: {}", prob * 100 as f32);
-    // bow.save("data/bow.dat")
+    bow.save("data/bow.dat")
 }
 
 fn read() {
     let bow = NGram::load("data/bow.dat");
     let stop_word_file = String::from("data/stop_words.txt");
     let validation_data = get_input_data_csv(String::from("data/twitter_validation.csv"), &stop_word_file);
-    let accuracy = NGram::validate(&bow.bags, 1, &validation_data);
+    let accuracy = NGram::validate(&bow.bags, bow.num_grams, &validation_data);
     println!("Accuracy: {}", accuracy);
+}
+
+fn parse() {
+    NGram::parse("data/bow.dat", "data/twitter_validation.csv", "data/parsed.csv");
 }
 
 fn main() {
     // validate_bow()
     // validate_mc();
-    write();
+    // write();
     // read();
+    parse();
 }

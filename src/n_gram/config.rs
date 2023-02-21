@@ -1,5 +1,7 @@
-use std::{str::FromStr, fmt::Debug};
-use json::JsonValue;
+use std::{str::FromStr, fmt::Debug, fs::File, io::Read};
+use json::{JsonValue, parse};
+
+use crate::n_gram::NGram;
 
 /*
 Config file structure:
@@ -182,4 +184,57 @@ pub struct LearnConfig {
     pub prune_similarity: Option<PruneSimilarityConfig>,
     pub prune_count: Option<PruneCountConfig>,
     pub randomizer: Option<RandomizerConfig>,
+}
+
+impl NGram {
+    pub fn read_config(file_name: &str) -> LearnConfig {
+        let mut config = LearnConfig { 
+            prune_selection: PruneSelectionConfig { 
+                probability: false, 
+                similarity: false, 
+                count: false, 
+                randomizer: false 
+            },
+            prune_probability: None,
+            prune_similarity: None,
+            prune_count: None,
+            randomizer: None
+        };
+        let mut file = File::open(file_name).expect("Creating file object error");
+        let mut file_contents = String::new();
+        file.read_to_string(&mut file_contents).expect("Reading file error");
+        if file_contents.eq("") { panic!("Loading bag of words: File empty") }
+        let json_data = parse(&file_contents).unwrap();
+
+        let probability_s = "probability";
+        if json_data.has_key(probability_s) {
+            config.prune_selection.probability = true;
+            config.prune_probability = Some(PruneProbabilityConfig::from_json(&json_data[probability_s]));
+        }
+
+        let similarity_s = "similarity";
+        if json_data.has_key(similarity_s) {
+            config.prune_selection.similarity = true;
+            config.prune_similarity = Some(PruneSimilarityConfig::from_json(&json_data[similarity_s]));
+        }
+
+        let count_s = "count";
+        if json_data.has_key(count_s) {
+            config.prune_selection.count = true;
+            config.prune_count = Some(PruneCountConfig::from_json(&json_data[count_s]));
+        }
+
+        let randomizer_s = "randomizer";
+        if json_data.has_key(randomizer_s) {
+            config.prune_selection.randomizer = true;
+            config.randomizer = Some(RandomizerConfig::from_json(&json_data[randomizer_s]));
+        }
+
+        let selection_s = "selection";
+        if json_data.has_key(selection_s) {
+            config.prune_selection = PruneSelectionConfig::from_json(&json_data[selection_s]);
+        }
+
+        config
+    }
 }

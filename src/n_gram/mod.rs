@@ -1,6 +1,6 @@
 use itertools::Itertools;
-use json::parse;
-use std::{collections::HashMap, io::{Write, Read}, fs::File};
+use std::{collections::HashMap, io::{Write, Read}};
+use std::collections::VecDeque;
 
 pub mod config;
 pub mod learn;
@@ -8,25 +8,48 @@ pub mod file;
 
 use crate::util::{InputTup, multi_thread_process_list, reduce};
 
-use self::config::*;
-
 // (total num words, word -> probability)
 // probability = num times word appears / total num words
 pub type WordBag = (usize, HashMap<String, f32>);
 pub type BagMap = HashMap<String, WordBag>;
 
-pub struct BagOfWords {
-    pub bags: BagMap
+pub struct NGram {
+    pub bags: BagMap,
+    pub num_grams: i8
 }
 
-impl BagOfWords {
+impl NGram {
+    fn create_grams(s: &String, n: usize) -> Vec<String> {
+        let mut ret_val = Vec::new();
+        let mut last_words: VecDeque<String> = VecDeque::new();
+        for wd in s.split(" ") {
+            if wd.eq("") { continue; }
+            last_words.push_back(String::from(wd));
+            if last_words.len() < n {
+                continue;
+            }
+            let mut gram = String::from("");
+            let mut first = true;
+            for g_wd in last_words.clone() {
+                let w = if first { g_wd } else { format!(" {}", g_wd) };
+                if first {
+                    first = false;
+                }
+                gram.push_str(&w);
+            }
+            last_words.pop_front();
+            ret_val.push(gram);
+        }
+        ret_val
+    }
+
     fn train_word_vector(&mut self, bag_name: &String, input_data: &Vec<String>) {
-        let word_group = input_data.iter()
-            .flat_map(|s| s.split(" "))
+        let gram_groups = input_data.iter()
+            .flat_map(|s| NGram::create_grams(s, self.num_grams as usize))
             .sorted()
             .group_by(|s| String::from(s.to_owned()));
 
-        let words = word_group
+        let grams = gram_groups
             .into_iter()
             .map(|(wd, grp)| (wd, grp.count()))
             .collect_vec();
@@ -38,7 +61,7 @@ impl BagOfWords {
 
         let input_length = input_data.len();
         let total_inputs = input_length + current_total;
-        for (wd, input_count) in words {
+        for (wd, input_count) in grams {
             if wd.eq("") {continue;}
             let o_current_prob = wv.get(&wd);
             let current_prob = if o_current_prob.is_some()
@@ -54,8 +77,8 @@ impl BagOfWords {
         self.bags.insert(bag_name.clone(), (total_inputs, wv));
     }
 
-    pub fn new(input_data: &Vec<InputTup>) -> BagOfWords {
-        let mut bow = BagOfWords { bags: BagMap::new() };
+    pub fn new(input_data: &Vec<InputTup>, num_grams: i8) -> NGram {
+        let mut bow = NGram { bags: BagMap::new(), num_grams };
         bow.train(input_data);
         bow
     }
@@ -72,10 +95,10 @@ impl BagOfWords {
         }
     }
 
-    fn test_word(bow: &BagMap, word: &String) -> String {
+    fn test_gram(bow: &BagMap, gram: &String) -> String {
         let mut best_prob: (String, f32) = (String::from(""), 0.0);
         for (bag_name, (_, bag)) in bow.into_iter() {
-            let m_prob = bag.get(word);
+            let m_prob = bag.get(gram);
             if m_prob.is_none() {
                 continue;
             }
@@ -87,10 +110,10 @@ impl BagOfWords {
         String::from(best_prob.0)
     }
 
-    pub fn test_sentence_static(bow: &BagMap, sentence: &String) -> String {
+    pub fn test_sentence_static(bow: &BagMap, num_grams: i8, sentence: &String) -> String {
         let mut totals_hm: HashMap<String, i32> = HashMap::new();
-        for wd in sentence.split(" ") {
-            let best_bag = BagOfWords::test_word(bow, &String::from(wd));
+        for wd in NGram::create_grams(sentence, num_grams as usize) {
+            let best_bag = NGram::test_gram(bow, &String::from(wd));
             if best_bag.eq("") { continue; }
             let m_total = totals_hm.get(&best_bag);
             let total: i32 = if m_total.is_none() { 1 } else { m_total.expect("") + 1 };
@@ -109,73 +132,22 @@ impl BagOfWords {
     }
 
     pub fn test_sentence(&self, sentence: &String) -> String {
-        BagOfWords::test_sentence_static(&self.bags, sentence)
+        NGram::test_sentence_static(&self.bags, self.num_grams, sentence)
     }
 
-    pub fn validate(bags: &BagMap, input: &Vec<InputTup>) -> f32 {
+    pub fn validate(bags: &BagMap, num_grams: i8, input: &Vec<InputTup>) -> f32 {
         let num_inputs = input.len();
-        let f_thread = |ctx: BagMap, chunk: &Vec<(String, String)>| -> Vec<bool> {
+        let f_thread = |(c_bags, c_num_grams): (BagMap, i8), chunk: &Vec<(String, String)>| -> Vec<bool> {
             let mut correct_vec = Vec::new();
             for (tweet_type, sentence) in chunk {
-                correct_vec.push(&BagOfWords::test_sentence_static(&ctx, sentence) == tweet_type)
+                correct_vec.push(&NGram::test_sentence_static(&c_bags, c_num_grams, sentence) == tweet_type)
             }
             correct_vec
         };
         
-        let results = multi_thread_process_list(input, bags.clone(), 16, f_thread, None);
+        let results = multi_thread_process_list(input, (bags.clone(), num_grams), 16, f_thread, None);
         let num_correct = results.into_iter().filter(|b| *b).collect_vec().len() as i32;
         
         num_correct as f32 / num_inputs as f32
-    }
-
-    pub fn read_config(file_name: &str) -> LearnConfig {
-        let mut config = LearnConfig { 
-            prune_selection: PruneSelectionConfig { 
-                probability: false, 
-                similarity: false, 
-                count: false, 
-                randomizer: false 
-            },
-            prune_probability: None,
-            prune_similarity: None,
-            prune_count: None,
-            randomizer: None
-        };
-        let mut file = File::open(file_name).expect("Creating file object error");
-        let mut file_contents = String::new();
-        file.read_to_string(&mut file_contents).expect("Reading file error");
-        if file_contents.eq("") { panic!("Loading bag of words: File empty") }
-        let json_data = parse(&file_contents).unwrap();
-
-        let probability_s = "probability";
-        if json_data.has_key(probability_s) {
-            config.prune_selection.probability = true;
-            config.prune_probability = Some(PruneProbabilityConfig::from_json(&json_data[probability_s]));
-        }
-
-        let similarity_s = "similarity";
-        if json_data.has_key(similarity_s) {
-            config.prune_selection.similarity = true;
-            config.prune_similarity = Some(PruneSimilarityConfig::from_json(&json_data[similarity_s]));
-        }
-
-        let count_s = "count";
-        if json_data.has_key(count_s) {
-            config.prune_selection.count = true;
-            config.prune_count = Some(PruneCountConfig::from_json(&json_data[count_s]));
-        }
-
-        let randomizer_s = "randomizer";
-        if json_data.has_key(randomizer_s) {
-            config.prune_selection.randomizer = true;
-            config.randomizer = Some(RandomizerConfig::from_json(&json_data[randomizer_s]));
-        }
-
-        let selection_s = "selection";
-        if json_data.has_key(selection_s) {
-            config.prune_selection = PruneSelectionConfig::from_json(&json_data[selection_s]);
-        }
-
-        config
     }
 }

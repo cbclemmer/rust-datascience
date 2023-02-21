@@ -1,7 +1,7 @@
 use itertools::Itertools;
 
-use lib::bag_of_words::BagMap;
-use lib::bag_of_words::BagOfWords;
+use lib::n_gram::BagMap;
+use lib::n_gram::NGram;
 use lib::markov_chain::{MarkovChain, StateMap};
 use lib::util::{get_input_data_csv, get_markov_data, multi_thread_process_list};
 
@@ -40,23 +40,23 @@ fn write() {
     let stop_word_file = String::from("data/stop_words.txt");
     let training_data = get_input_data_csv(String::from("data/twitter_training.csv"), &stop_word_file);
     println!("Training data");
-    let mut bow = BagOfWords::new(&training_data);
+    let mut bow = NGram::new(&training_data, 2);
     
     println!("Getting validation data");
     let validation_data = get_input_data_csv(String::from("data/twitter_validation.csv"), &stop_word_file);
     
-    let bow_config = BagOfWords::read_config("data/bow_config.json");
+    let bow_config = NGram::read_config("data/bow_config.json");
     bow.learn(&validation_data, Some(bow_config));
-    let prob = BagOfWords::validate(&bow.bags, &validation_data);
+    let prob = NGram::validate(&bow.bags, bow.num_grams, &validation_data);
     println!("Accuracy: {}", prob * 100 as f32);
     // bow.save("data/bow.dat")
 }
 
 fn read() {
-    let bow = BagOfWords::load("data/bow.dat");
+    let bow = NGram::load("data/bow.dat");
     let stop_word_file = String::from("data/stop_words.txt");
     let validation_data = get_input_data_csv(String::from("data/twitter_validation.csv"), &stop_word_file);
-    let accuracy = BagOfWords::validate(&bow.bags, &validation_data);
+    let accuracy = NGram::validate(&bow.bags, 1, &validation_data);
     println!("Accuracy: {}", accuracy);
 }
 

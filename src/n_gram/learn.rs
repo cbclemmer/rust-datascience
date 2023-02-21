@@ -4,16 +4,16 @@ use std::ops::Index;
 use std::time::Instant;
 
 use crate::util::{InputTup, get_percent, multi_thread_process_list};
-use crate::bag_of_words::{BagOfWords, BagMap};
-use crate::bag_of_words::config::*;
+use crate::n_gram::{NGram, BagMap};
+use crate::n_gram::config::*;
 
-impl BagOfWords {
+impl NGram {
     // TODO: decrease probability until there are no removed words, then increase
     fn prune_probability(&self, input: &Vec<InputTup>, o_initial_accuracy: &Option<f32>, config: PruneProbabilityConfig) -> (f32, BagMap) {
         println!("\n\n\nOptimizing by minimum probability");
         println!("Testing accuracy...");
         let initial_accuracy = if o_initial_accuracy.is_none()
-            { BagOfWords::validate(&self.bags, input) }
+            { NGram::validate(&self.bags, self.num_grams, input) }
             else { o_initial_accuracy.expect("ERR") };
 
         println!("Accuracy: {}%", f32::ceil(initial_accuracy * 100 as f32));
@@ -39,7 +39,7 @@ impl BagOfWords {
             println!("Removed Words: {}", removed_words);
             last_accuracy = current_accuracy;
             println!("\nTesting accuracy...");
-            current_accuracy = BagOfWords::validate(&tmp_bags, input);
+            current_accuracy = NGram::validate(&tmp_bags, self.num_grams, input);
             println!("Accuracy: {}%", get_percent(&current_accuracy));
             if current_accuracy > initial_accuracy - config.max_accuracy_reduction  as f32 {
                 println!("\nAccuracy target met!");
@@ -72,7 +72,7 @@ impl BagOfWords {
     }
 
     fn prune_similarity(&self, max_deviation: &f32) -> BagMap {
-        let words = BagOfWords::get_words_in_bags(&self.bags);
+        let words = NGram::get_words_in_bags(&self.bags);
 
         let mut remove_words = Vec::new();
         println!("Words: {}", words.clone().into_iter().collect_vec().len());
@@ -124,7 +124,7 @@ impl BagOfWords {
         let mut last_accuracy: f32;
         println!("Testing Accuracy...");
         let initial_accuracy = if o_initial_accuracy.is_none()
-            { BagOfWords::validate(&self.bags, input) }
+            { NGram::validate(&self.bags, self.num_grams, input) }
             else { o_initial_accuracy.expect("ERR") };
 
         let mut new_accuracy = initial_accuracy;
@@ -138,7 +138,7 @@ impl BagOfWords {
             last_accuracy = new_accuracy;
 
             println!("\nTesting Accuracy...");
-            new_accuracy = BagOfWords::validate(&tmp_bags, input);
+            new_accuracy = NGram::validate(&tmp_bags, self.num_grams, input);
             println!("Accuracy: {}%", get_percent(&new_accuracy));
             if new_accuracy < initial_accuracy - config.max_accuracy_reduction as f32 && !found_low {
                 println!("Still finding minimum deviation");
@@ -179,7 +179,7 @@ impl BagOfWords {
         }
         removed_words.dedup();
         println!("Pruned by count, removed {} words", removed_words.len());
-        let word_count = BagOfWords::get_words_in_bags(&ret_bags).len();
+        let word_count = NGram::get_words_in_bags(&ret_bags).len();
         println!("Words left: {}", word_count);
         ret_bags
     }
@@ -218,7 +218,7 @@ impl BagOfWords {
         println!("\n\n\nStarting randomizer");
         println!("\nTesting Accuracy...");
         let initial_accuracy = if o_initial_accuracy.is_none()
-            { BagOfWords::validate(&self.bags, input) }
+            { NGram::validate(&self.bags, self.num_grams, input) }
             else { o_initial_accuracy.expect("ERR") };
         
         let mut current_accuracy = initial_accuracy;
@@ -229,15 +229,15 @@ impl BagOfWords {
             if i % 100 == 0 {
                 println!("{} iterations", i);
             }
-            let f_thread = |((input_ctx, words, config), bags_ctx): ((Vec<InputTup>, Vec<String>, RandomizerConfig), BagMap), _: &Vec<i32>| -> Vec<(f32, BagMap)> {
-                let new_bags = BagOfWords::randomize_inputs(bags_ctx, &words, config);
-                let new_accuracy = BagOfWords::validate(&new_bags, &input_ctx);
+            let f_thread = |((input_ctx, words, config), (bags_ctx, c_num_grams)): ((Vec<InputTup>, Vec<String>, RandomizerConfig), (BagMap, i8)), _: &Vec<i32>| -> Vec<(f32, BagMap)> {
+                let new_bags = NGram::randomize_inputs(bags_ctx, &words, config);
+                let new_accuracy = NGram::validate(&new_bags, c_num_grams, &input_ctx);
                 vec![(new_accuracy, new_bags)]
             };
             
             let iter_list = 0..config.iterations;
-            let words = BagOfWords::get_words_in_bags(&self.bags);
-            let ret_vec = multi_thread_process_list(&iter_list.collect_vec(), ((input.clone(), words, config.clone()), ret_bags.clone()), 12, f_thread, None);
+            let words = NGram::get_words_in_bags(&self.bags);
+            let ret_vec = multi_thread_process_list(&iter_list.collect_vec(), ((input.clone(), words, config.clone()), (ret_bags.clone(), self.num_grams)), 12, f_thread, None);
             for (new_accuracy, new_bags) in ret_vec {
                 if new_accuracy > current_accuracy {
                     println!("Accuracy: {}%", get_percent(&new_accuracy));

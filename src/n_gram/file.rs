@@ -85,18 +85,15 @@ impl NGram {
         NGram { bags: bm, num_grams }
     }
 
-    pub fn parse(ngram_file_path: &str, input_file_path: &str, output_file_path: &str) {
+    pub fn parse(ngram_file_path: &str, input: Vec<String>, output_file_path: &str) {
         let ngram = NGram::load(ngram_file_path);
 
-        let mut input_file = File::open(input_file_path).expect("Creating file object error");
-        let mut input_file_contents = String::new();
-        input_file.read_to_string(&mut input_file_contents).expect("Reading file error");
-        if input_file_contents.eq("") { panic!("Loading bag of words: File empty") }
-
-        let mut output_file = File::create(output_file_path).expect("Error creating output file");
-        for line in input_file_contents.split("\n") {
-            let res = ngram.test_sentence(&String::from(line));
-            output_file.write((res + "\n").as_bytes()).expect("Error writing result to file");
+        let mut results = Vec::new();
+        for sentence in input {
+            let res = ngram.test_sentence(&sentence);
+            results.push(res + "\n");
         }
+        let mut output_file = File::create(output_file_path).expect("Error creating output file");
+        output_file.write(results.concat().as_bytes()).expect("Error writing result to file");
     }
 }

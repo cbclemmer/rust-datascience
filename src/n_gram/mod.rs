@@ -112,21 +112,24 @@ impl NGram {
 
     pub fn test_sentence_static(bow: &BagMap, num_grams: i8, sentence: &String) -> String {
         let mut totals_hm: HashMap<String, i32> = HashMap::new();
-        for wd in NGram::create_grams(sentence, num_grams as usize) {
-            let best_bag = NGram::test_gram(bow, &String::from(wd));
+        for gram in NGram::create_grams(sentence, num_grams as usize) {
+            let best_bag = NGram::test_gram(bow, &gram);
             if best_bag.eq("") { continue; }
             let m_total = totals_hm.get(&best_bag);
-            let total: i32 = if m_total.is_none() { 1 } else { m_total.expect("") + 1 };
+            let total: i32 = if m_total.is_none() { 1 } else { m_total.unwrap() + 1 };
             totals_hm.insert(best_bag, total);
         }
     
         let mut best_bag = (String::from(""), 0);
         for (bag_name, total) in totals_hm.into_iter() {
-            // println!("{}: {}", bag_name, total);
             if total > best_bag.1 {
                 best_bag = (bag_name, total)
             }
         }
+
+        // if best_bag.0.eq("") {
+        //     best_bag.0 = bow.into_iter().find_or_first(|_| { true }).unwrap().0.clone();
+        // }
     
         best_bag.0
     }

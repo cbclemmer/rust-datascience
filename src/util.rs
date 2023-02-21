@@ -75,7 +75,7 @@ pub fn clean_words(input: &String, bl_words: &Vec<String>) -> String {
     String::from(new_s)
 }
 
-fn get_stop_words(file_path: &String) -> Vec<String> {
+pub fn get_stop_words(file_path: &str) -> Vec<String> {
     fs::read_to_string(file_path)
         .expect("Error reading stop word file")
         .split("\n")
@@ -83,7 +83,7 @@ fn get_stop_words(file_path: &String) -> Vec<String> {
         .collect_vec()
 }
 
-pub fn get_input_data_csv(csv_file: String, stop_word_file: &String) -> Vec<InputTup> {
+pub fn get_input_data_csv(csv_file: &str, stop_word_file: &str) -> Vec<InputTup> {
     let stop_words = get_stop_words(stop_word_file);
 
     let file_contents = fs::read_to_string(csv_file)

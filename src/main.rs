@@ -7,6 +7,7 @@ use lib::n_gram::NGram;
 use lib::util::clean_words;
 use lib::util::get_stop_words;
 use lib::util::get_input_data_csv;
+use regex::Regex;
 
 fn write() {
     println!("Getting training data");
@@ -34,6 +35,11 @@ fn read() {
     println!("Accuracy: {}", accuracy);
 }
 
+fn remove_byte_codes(s: &str) -> String {
+    let reg = Regex::new(r"(\\x[a-f0-9][a-f0-9])").unwrap();
+    reg.replace_all(s, "").to_string()
+}
+
 fn parse() {
     let mut file = File::open("data/Task-1 tweets_1000.csv").expect("Creating file object error");
     let mut file_contents = String::new();
@@ -43,15 +49,14 @@ fn parse() {
     let stop_words = get_stop_words("data/stop_words.txt");
     let input = file_contents
         .split("\n")
+        .map(|s| remove_byte_codes(s))
         .map(|s| clean_words(&String::from(s), &stop_words))
         .collect_vec();
     NGram::parse("data/bow.dat", input, "data/parsed.csv");
 }
 
 fn main() {
-    // validate_bow()
-    // validate_mc();
     write();
-    // read();
-    // parse();
+    read();
+    parse();
 }

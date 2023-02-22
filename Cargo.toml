@@ -22,6 +22,7 @@ csv = "1.1.6"
 itertools = "0.10.5"
 json = "0.12.4"
 rand = "0.8.5"
+regex = "1.7.1"
 rustc-demangle = "0.1"
 
 [profiel.dev]

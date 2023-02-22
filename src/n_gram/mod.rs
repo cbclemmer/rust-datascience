@@ -130,10 +130,19 @@ impl NGram {
 
     pub fn test_sentence_static(bow: &Vec<NgramMap>, sentence: &String) -> String {
         let mut totals_hm: HashMap<String, i32> = HashMap::new();
+        let mut found_words: Vec<String> = Vec::new();
         for i in (1..(bow.len()+1)).rev() {
             for gram in NGram::create_grams(sentence, i) {
                 let best_type = NGram::test_gram(bow.index(i-1), &gram);
                 if best_type.eq("") { continue; }
+                let gram_words = gram.split(" ").collect_vec();
+                let first_word = gram_words.index(0);
+                let o_found_word = found_words.clone().into_iter().find(|wd| wd.eq(first_word));
+                if o_found_word.is_some() {
+                    continue;
+                } else {
+                    found_words.push(String::from(*first_word));
+                }
                 let m_total = totals_hm.get(&best_type);
                 let total: i32 = if m_total.is_none() { 1 } else { m_total.unwrap() + 1 };
                 totals_hm.insert(best_type, total);

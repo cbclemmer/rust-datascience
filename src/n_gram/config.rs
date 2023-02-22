@@ -203,7 +203,7 @@ impl NGram {
         let mut file = File::open(file_name).expect("Creating file object error");
         let mut file_contents = String::new();
         file.read_to_string(&mut file_contents).expect("Reading file error");
-        if file_contents.eq("") { panic!("Loading bag of words: File empty") }
+        if file_contents.eq("") { panic!("Loading n-gram model: File empty") }
         let json_data = parse(&file_contents).unwrap();
 
         let probability_s = "probability";

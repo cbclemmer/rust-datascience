@@ -64,7 +64,7 @@ impl NGram {
             { self.ngram_maps.index((num_grams - 1) as usize).get(type_name) };
 
         let (current_total, mut wv) = if o_wv.is_some() 
-            { o_wv.expect("ERR").clone() } 
+            { o_wv.unwrap().clone() } 
             else { (0 as usize, HashMap::new() as HashMap<String, f32>) };
 
         let input_length = input_data.len();
@@ -73,7 +73,7 @@ impl NGram {
             if wd.eq("") {continue;}
             let o_current_prob = wv.get(&wd);
             let current_prob = if o_current_prob.is_some()
-                { o_current_prob.expect("ERR").clone() }
+                { o_current_prob.unwrap().clone() }
                 else { 0 as f32 };
 
             let current_count = f32::ceil(current_prob * current_total as f32) as usize;

@@ -4,7 +4,7 @@ use std::ops::Index;
 use std::time::Instant;
 
 use crate::util::{InputTup, get_percent, multi_thread_process_list};
-use crate::n_gram::{NGram, BagMap};
+use crate::n_gram::{NGram, NgramMap};
 use crate::n_gram::config::*;
 
 impl NGram {
@@ -56,7 +56,7 @@ impl NGram {
     //     (last_accuracy, ret_bags)
     // }
 
-    fn get_words_in_bags(bags: &Vec<BagMap>) -> Vec<String> {
+    fn get_words_in_maps(bags: &Vec<NgramMap>) -> Vec<String> {
         let clone = bags.clone();
         let word_groups = clone
             .index(0) // 1 gram
@@ -164,32 +164,32 @@ impl NGram {
     //     (last_accuracy, ret_bags)
     // }
 
-    fn prune_count(&self, config: &PruneCountConfig) -> Vec<BagMap> {
+    fn prune_count(&self, config: &PruneCountConfig) -> Vec<NgramMap> {
         let mut ret_vec = Vec::new();
         let mut removed_words = Vec::new();
-        for bag_map in &self.bags {
-            let mut ret_bags = bag_map.clone();
-            for (bag_name, (total, bag)) in bag_map {
-                let mut bag_copy = bag.clone();
+        for g_map in &self.ngram_maps {
+            let mut ret_map = g_map.clone();
+            for (type_name, (total, bag)) in g_map {
+                let mut map_copy = bag.clone();
                 for (word, prob) in bag {
                     let count = (prob * *total as f32) + config.adjust_amount;
                     if count <= config.min_count as f32 {
-                        bag_copy.remove(word);
+                        map_copy.remove(word);
                         removed_words.push(word);
                     }
                 }
-                ret_bags.insert(bag_name.clone(), (total.clone(), bag_copy));
+                ret_map.insert(type_name.clone(), (total.clone(), map_copy));
             }
-            ret_vec.push(ret_bags);
+            ret_vec.push(ret_map);
         }
-        let word_count = NGram::get_words_in_bags(&ret_vec).len();
+        let word_count = NGram::get_words_in_maps(&ret_vec).len();
         removed_words.dedup();
         println!("Pruned by count, removed {} words", removed_words.len());
         println!("Words left: {}", word_count);
         ret_vec
     }
 
-    fn randomize_inputs(bag_maps: &Vec<BagMap>, words: &Vec<String>, config: RandomizerConfig) -> Vec<BagMap> {
+    fn randomize_inputs(gram_maps: &Vec<NgramMap>, words: &Vec<String>, config: RandomizerConfig) -> Vec<NgramMap> {
         let mut rng = rand::thread_rng();
         let num_params = config.num_params;
         let step_size = config.step_size;
@@ -202,9 +202,9 @@ impl NGram {
         }
         
         let mut ret_val = Vec::new();
-        for bag_map in bag_maps {
-            let mut ret_bags: BagMap = bag_map.clone();
-            for (bag_name, (total, mut wd_hm)) in bag_map.clone() {
+        for g_map in gram_maps {
+            let mut ret_map: NgramMap = g_map.clone();
+            for (type_name, (total, mut wd_hm)) in g_map.clone() {
                 for wd in &random_words {
                     let o_current_prob = wd_hm.get(wd);
                     if o_current_prob.is_none() { continue; }
@@ -213,39 +213,39 @@ impl NGram {
                     let step = step_positive * step_size;
                     wd_hm.insert(wd.to_owned(), current_prob + step);
                 }
-                ret_bags.insert(bag_name.to_owned(), (total, wd_hm));
+                ret_map.insert(type_name.to_owned(), (total, wd_hm));
             }
-            ret_val.push(ret_bags);
+            ret_val.push(ret_map);
         }
         
         ret_val
     }
 
-    fn learn_randomizer_loop(&self, input: &Vec<InputTup>, o_initial_accuracy: &Option<f32>, config: RandomizerConfig) -> (f32, Vec<BagMap>) {
+    fn learn_randomizer_loop(&self, input: &Vec<InputTup>, o_initial_accuracy: &Option<f32>, config: RandomizerConfig) -> (f32, Vec<NgramMap>) {
         println!("\n\n\nStarting randomizer");
         println!("\nTesting Accuracy...");
         let initial_accuracy = if o_initial_accuracy.is_none()
-            { NGram::validate(&self.bags, input) }
+            { NGram::validate(&self.ngram_maps, input) }
             else { o_initial_accuracy.expect("ERR") };
         
         let mut current_accuracy = initial_accuracy;
-        let mut ret_bags = self.bags.clone();
+        let mut ret_maps = self.ngram_maps.clone();
         let mut improve_timer = Instant::now();
         let mut last_improvement_iterations = 0;
         for i in 0..config.iterations {
             if i % 100 == 0 {
                 println!("{} iterations", i);
             }
-            let f_thread = |((input_ctx, words, config), bags_ctx): ((Vec<InputTup>, Vec<String>, RandomizerConfig), Vec<BagMap>), _: &Vec<i32>| -> Vec<(f32, Vec<BagMap>)> {
-                let new_bags = NGram::randomize_inputs(&bags_ctx, &words, config);
-                let new_accuracy = NGram::validate(&new_bags, &input_ctx);
-                vec![(new_accuracy, new_bags)]
+            let f_thread = |((input_ctx, words, config), maps): ((Vec<InputTup>, Vec<String>, RandomizerConfig), Vec<NgramMap>), _: &Vec<i32>| -> Vec<(f32, Vec<NgramMap>)> {
+                let new_maps = NGram::randomize_inputs(&maps, &words, config);
+                let new_accuracy = NGram::validate(&new_maps, &input_ctx);
+                vec![(new_accuracy, new_maps)]
             };
             
             let iter_list = 0..config.iterations;
-            let words = NGram::get_words_in_bags(&self.bags);
-            let ret_vec = multi_thread_process_list(&iter_list.collect_vec(), ((input.clone(), words, config.clone()), ret_bags.clone()), 12, f_thread, None);
-            for (new_accuracy, new_bags) in ret_vec {
+            let words = NGram::get_words_in_maps(&self.ngram_maps);
+            let ret_vec = multi_thread_process_list(&iter_list.collect_vec(), ((input.clone(), words, config.clone()), ret_maps.clone()), 12, f_thread, None);
+            for (new_accuracy, new_maps) in ret_vec {
                 if new_accuracy > current_accuracy {
                     println!("Accuracy: {}%", get_percent(&new_accuracy));
                     println!("Time taken: {:?}", improve_timer.elapsed());
@@ -253,13 +253,13 @@ impl NGram {
                     last_improvement_iterations = 0;
                     improve_timer = Instant::now();
                     current_accuracy = new_accuracy;
-                    ret_bags = new_bags;
+                    ret_maps = new_maps;
                 }
             }
             last_improvement_iterations = last_improvement_iterations + 1;
         }
 
-        (current_accuracy, ret_bags)
+        (current_accuracy, ret_maps)
     }
 
     pub fn learn(&mut self, input: &Vec<InputTup>, o_learn_config: Option<LearnConfig>) {
@@ -312,12 +312,12 @@ impl NGram {
         // }
 
         if learn_config.prune_selection.probability {
-            let (_, bags) = self.learn_randomizer_loop(input, &accuracy, learn_config.randomizer.expect("config err"));
-            self.bags = bags;
+            let (_, maps) = self.learn_randomizer_loop(input, &accuracy, learn_config.randomizer.expect("config err"));
+            self.ngram_maps = maps;
         }
 
         if learn_config.prune_selection.count {
-            self.bags = self.prune_count(&learn_config.prune_count.expect("config err"));
+            self.ngram_maps = self.prune_count(&learn_config.prune_count.expect("config err"));
         }
     }
 }

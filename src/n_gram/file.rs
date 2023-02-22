@@ -7,7 +7,7 @@ impl NGram {
     pub fn save(&self, file_name: &str) {
         let mut file_data = String::from("");
         for i in 0..self.max_grams {
-            for (bag_name, (total, bag)) in self.bags.index(i as usize).clone() {
+            for (bag_name, (total, bag)) in self.ngram_maps.index(i as usize).clone() {
                 // Positive,123|
                 file_data = file_data + &bag_name + "," + &total.to_string() + "|";
                 let bag_vec = bag.into_iter().collect_vec();
@@ -29,10 +29,10 @@ impl NGram {
         file.read_to_string(&mut file_contents).expect("Reading file error");
         if file_contents.eq("") { panic!("Loading n-gram model: File empty") }
         let bags = file_contents.split("\n");
-        let mut bag_maps: Vec<BagMap> = Vec::new();
+        let mut bag_maps: Vec<NgramMap> = Vec::new();
         let mut max_grams = 0;
 
-        let mut bm: BagMap = BagMap::new();
+        let mut bm: NgramMap = NgramMap::new();
         for bag in bags {
             if bag.eq("") { continue; }
             if bag.eq("<<GRAM>>") {
@@ -86,7 +86,7 @@ impl NGram {
             let bag_total = bag_total_s.parse::<usize>().unwrap();
             bm.insert(bag_name, (bag_total, words));
         }
-        NGram { bags: bag_maps, max_grams }
+        NGram { ngram_maps: bag_maps, max_grams }
     }
 
     pub fn parse(ngram_file_path: &str, input: Vec<String>, output_file_path: &str) {

@@ -3,7 +3,7 @@ use std::io::Read;
 
 use itertools::Itertools;
 
-use lib::n_gram::BagMap;
+use lib::n_gram::NgramMap;
 use lib::n_gram::NGram;
 use lib::markov_chain::{MarkovChain, StateMap};
 use lib::util::clean_words;
@@ -52,7 +52,7 @@ fn write() {
     
     let bow_config = NGram::read_config("data/bow_config.json");
     // bow.learn(&validation_data, Some(bow_config));
-    let prob = NGram::validate(&bow.bags, &validation_data);
+    let prob = NGram::validate(&bow.ngram_maps, &validation_data);
     println!("Accuracy: {}", prob * 100 as f32);
     bow.save("data/bow.dat")
 }
@@ -61,7 +61,7 @@ fn read() {
     let bow = NGram::load("data/bow.dat");
     let stop_word_file = String::from("data/stop_words.txt");
     let validation_data = get_input_data_csv("data/twitter_validation.csv", &stop_word_file);
-    let accuracy = NGram::validate(&bow.bags, &validation_data);
+    let accuracy = NGram::validate(&bow.ngram_maps, &validation_data);
     println!("Accuracy: {}", accuracy);
 }
 

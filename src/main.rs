@@ -45,7 +45,7 @@ fn write() {
     let stop_word_file = String::from("data/stop_words.txt");
     let training_data = get_input_data_csv("data/twitter_training.csv", &stop_word_file);
     println!("Training data");
-    let mut bow = NGram::new(&training_data, 2);
+    let mut bow = NGram::new(&training_data, 3);
     
     println!("Getting validation data");
     let validation_data = get_input_data_csv("data/twitter_validation.csv", &stop_word_file);

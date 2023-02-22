@@ -6,16 +6,18 @@ use crate::n_gram::*;
 impl NGram {
     pub fn save(&self, file_name: &str) {
         let mut file_data = String::from("");
-        file_data = file_data + &self.num_grams.to_string() + "\n";
-        for (bag_name, (total, bag)) in self.bags.clone() {
-            // Positive,2,123|
-            file_data = file_data + &bag_name + "," + &total.to_string() + "|";
-            let bag_vec = bag.into_iter().collect_vec();
-            let bag_string = reduce::<(String, f32), String>(&bag_vec, &String::from(""), |(word, prob), acc| {
-                // "foo"0.123"bar"0.234
-                acc + "\"" + word + "\"" + &prob.to_string()
-            });
-            file_data = file_data + &bag_string + "\n"
+        for i in 0..self.max_grams {
+            for (bag_name, (total, bag)) in self.bags.index(i as usize).clone() {
+                // Positive,123|
+                file_data = file_data + &bag_name + "," + &total.to_string() + "|";
+                let bag_vec = bag.into_iter().collect_vec();
+                let bag_string = reduce::<(String, f32), String>(&bag_vec, &String::from(""), |(word, prob), acc| {
+                    // "foo"0.123"bar"0.234
+                    acc + "\"" + word + "\"" + &prob.to_string()
+                });
+                file_data = file_data + &bag_string + "\n"
+            }
+            file_data = file_data + "<<GRAM>>\n"; // at the end of each gram bag
         }
         let mut file = File::create(file_name).expect("Creating object file error");
         file.write_all(file_data.as_bytes()).expect("Writing file error");
@@ -27,14 +29,16 @@ impl NGram {
         file.read_to_string(&mut file_contents).expect("Reading file error");
         if file_contents.eq("") { panic!("Loading n-gram model: File empty") }
         let bags = file_contents.split("\n");
-        let mut bm = BagMap::new();
-        let mut num_grams: i8 = 0;
-        let mut first = true;
+        let mut bag_maps: Vec<BagMap> = Vec::new();
+        let mut max_grams = 0;
+
+        let mut bm: BagMap = BagMap::new();
         for bag in bags {
             if bag.eq("") { continue; }
-            if first {
-                num_grams = bag.parse::<i8>().unwrap();
-                first = false;
+            if bag.eq("<<GRAM>>") {
+                bag_maps.push(bm.clone());
+                bm.clear();
+                max_grams = max_grams + 1;
                 continue;
             }
             let mut bag_name = String::new();
@@ -82,7 +86,7 @@ impl NGram {
             let bag_total = bag_total_s.parse::<usize>().unwrap();
             bm.insert(bag_name, (bag_total, words));
         }
-        NGram { bags: bm, num_grams }
+        NGram { bags: bag_maps, max_grams }
     }
 
     pub fn parse(ngram_file_path: &str, input: Vec<String>, output_file_path: &str) {

@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use std::{collections::HashMap, io::{Write, Read}};
+use std::{collections::HashMap, io::{Write, Read}, ops::Index};
 use std::collections::VecDeque;
 
 pub mod config;
@@ -14,8 +14,8 @@ pub type WordBag = (usize, HashMap<String, f32>);
 pub type BagMap = HashMap<String, WordBag>;
 
 pub struct NGram {
-    pub bags: BagMap,
-    pub num_grams: i8
+    pub bags: Vec<BagMap>,
+    pub max_grams: i8
 }
 
 impl NGram {
@@ -43,9 +43,9 @@ impl NGram {
         ret_val
     }
 
-    fn train_word_vector(&mut self, bag_name: &String, input_data: &Vec<String>) {
+    fn train_word_vector(&self, bag_name: &String, input_data: &Vec<String>, num_grams: i8) -> WordBag {
         let gram_groups = input_data.iter()
-            .flat_map(|s| NGram::create_grams(s, self.num_grams as usize))
+            .flat_map(|s| NGram::create_grams(s, num_grams as usize))
             .sorted()
             .group_by(|s| String::from(s.to_owned()));
 
@@ -54,7 +54,12 @@ impl NGram {
             .map(|(wd, grp)| (wd, grp.count()))
             .collect_vec();
         
-        let o_wv = self.bags.get(bag_name);
+        let g_index = (num_grams - 1) as usize;
+        let new_wv = (0 as usize, HashMap::new());
+        let o_wv = if g_index >= self.bags.len() 
+            { Some(&new_wv) } else 
+            { self.bags.index((num_grams - 1) as usize).get(bag_name) };
+
         let (current_total, mut wv) = if o_wv.is_some() 
             { o_wv.expect("ERR").clone() } 
             else { (0 as usize, HashMap::new() as HashMap<String, f32>) };
@@ -74,11 +79,13 @@ impl NGram {
             let prob = total_count as f32 / total_inputs as f32;
             wv.insert(String::from(wd), prob);
         }
-        self.bags.insert(bag_name.clone(), (total_inputs, wv));
+        // self.bags.index((num_grams - 1) as usize).insert(bag_name.clone(), (total_inputs, wv));
+        (total_inputs, wv)
     }
 
-    pub fn new(input_data: &Vec<InputTup>, num_grams: i8) -> NGram {
-        let mut bow = NGram { bags: BagMap::new(), num_grams };
+
+    pub fn new(input_data: &Vec<InputTup>, max_grams: i8) -> NGram {
+        let mut bow = NGram { bags: Vec::new(), max_grams };
         bow.train(input_data);
         bow
     }
@@ -88,10 +95,19 @@ impl NGram {
             .filter(|tup| tup.0 != "")
             .sorted_by(|tup1, tup2| tup1.0.cmp(&tup2.0))
             .group_by(|&tup| tup.0.to_owned());
+
+        let mut input_group_vec = Vec::new();
+        for (name, g) in input_groups.into_iter() {
+            let wv_input = g.map(|tup| tup.1.to_owned()).collect_vec();
+            input_group_vec.push((name, wv_input));
+        }
         
-        for (key, group) in &input_groups {
-            let wv_input = group.map(|tup| tup.1.to_owned()).collect_vec();
-            self.train_word_vector(&key, &wv_input);
+        for i in 1..(self.max_grams+1) {
+            let mut bm = HashMap::new();
+            for (key, wv_input) in &input_group_vec {
+                bm.insert(key.clone(), self.train_word_vector(&key, &wv_input, i));
+            }
+            self.bags.push(bm);
         }
     }
 
@@ -110,14 +126,16 @@ impl NGram {
         String::from(best_prob.0)
     }
 
-    pub fn test_sentence_static(bow: &BagMap, num_grams: i8, sentence: &String) -> String {
+    pub fn test_sentence_static(bow: &Vec<BagMap>, sentence: &String) -> String {
         let mut totals_hm: HashMap<String, i32> = HashMap::new();
-        for gram in NGram::create_grams(sentence, num_grams as usize) {
-            let best_bag = NGram::test_gram(bow, &gram);
-            if best_bag.eq("") { continue; }
-            let m_total = totals_hm.get(&best_bag);
-            let total: i32 = if m_total.is_none() { 1 } else { m_total.unwrap() + 1 };
-            totals_hm.insert(best_bag, total);
+        for i in (1..(bow.len()+1)).rev() {
+            for gram in NGram::create_grams(sentence, i) {
+                let best_bag = NGram::test_gram(bow.index(i-1), &gram);
+                if best_bag.eq("") { continue; }
+                let m_total = totals_hm.get(&best_bag);
+                let total: i32 = if m_total.is_none() { 1 } else { m_total.unwrap() + 1 };
+                totals_hm.insert(best_bag, total);
+            }
         }
     
         let mut best_bag = (String::from(""), 0);
@@ -127,28 +145,28 @@ impl NGram {
             }
         }
 
-        // if best_bag.0.eq("") {
-        //     best_bag.0 = bow.into_iter().find_or_first(|_| { true }).unwrap().0.clone();
-        // }
+        if best_bag.0.eq("") {
+            best_bag.0 = String::from("Inconclusive");
+        }
     
         best_bag.0
     }
 
     pub fn test_sentence(&self, sentence: &String) -> String {
-        NGram::test_sentence_static(&self.bags, self.num_grams, sentence)
+        NGram::test_sentence_static(&self.bags, sentence)
     }
 
-    pub fn validate(bags: &BagMap, num_grams: i8, input: &Vec<InputTup>) -> f32 {
+    pub fn validate(bags: &Vec<BagMap>, input: &Vec<InputTup>) -> f32 {
         let num_inputs = input.len();
-        let f_thread = |(c_bags, c_num_grams): (BagMap, i8), chunk: &Vec<(String, String)>| -> Vec<bool> {
+        let f_thread = |c_bags: Vec<BagMap>, chunk: &Vec<(String, String)>| -> Vec<bool> {
             let mut correct_vec = Vec::new();
             for (tweet_type, sentence) in chunk {
-                correct_vec.push(&NGram::test_sentence_static(&c_bags, c_num_grams, sentence) == tweet_type)
+                correct_vec.push(&NGram::test_sentence_static(&c_bags, sentence) == tweet_type)
             }
             correct_vec
         };
         
-        let results = multi_thread_process_list(input, (bags.clone(), num_grams), 16, f_thread, None);
+        let results = multi_thread_process_list(input, bags.clone(), 16, f_thread, None);
         let num_correct = results.into_iter().filter(|b| *b).collect_vec().len() as i32;
         
         num_correct as f32 / num_inputs as f32

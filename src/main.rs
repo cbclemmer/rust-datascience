@@ -3,60 +3,61 @@ use std::io::Read;
 
 use itertools::Itertools;
 
+use lib::markov_chain::MarkovChain;
 use lib::n_gram::NGram;
 use lib::util::clean_words;
 use lib::util::get_stop_words;
 use lib::util::get_input_data_csv;
 use regex::Regex;
 
-fn write() {
-    println!("Getting training data");
+// fn write() {
+//     println!("Getting training data");
     
-    let stop_word_file = String::from("data/stop_words.txt");
-    let training_data = get_input_data_csv("data/twitter_training.csv", &stop_word_file);
-    println!("Training data");
-    let mut bow = NGram::new(&training_data, 3);
+//     let stop_word_file = String::from("data/stop_words.txt");
+//     let training_data = get_input_data_csv("data/twitter_training.csv", &stop_word_file);
+//     println!("Training data");
+//     let mut bow = NGram::new(&training_data, 3);
     
-    println!("Getting validation data");
-    let validation_data = get_input_data_csv("data/twitter_validation.csv", &stop_word_file);
+//     println!("Getting validation data");
+//     let validation_data = get_input_data_csv("data/twitter_validation.csv", &stop_word_file);
     
-    let bow_config = NGram::read_config("data/bow_config.json");
-    bow.learn(&validation_data, Some(bow_config));
-    let prob = NGram::validate(&bow.ngram_maps, &validation_data);
-    println!("Accuracy: {}", prob * 100 as f32);
-    bow.save("data/bow.dat")
-}
+//     let bow_config = NGram::read_config("data/bow_config.json");
+//     bow.learn(&validation_data, Some(bow_config));
+//     let prob = NGram::validate(&bow.ngram_maps, &validation_data);
+//     println!("Accuracy: {}", prob * 100 as f32);
+//     bow.save("data/bow.dat")
+// }
 
-fn read() {
-    let bow = NGram::load("data/bow.dat");
-    let stop_word_file = String::from("data/stop_words.txt");
-    let validation_data = get_input_data_csv("data/twitter_validation.csv", &stop_word_file);
-    let accuracy = NGram::validate(&bow.ngram_maps, &validation_data);
-    println!("Accuracy: {}", accuracy);
-}
+// fn read() {
+//     let bow = NGram::load("data/bow.dat");
+//     let stop_word_file = String::from("data/stop_words.txt");
+//     let validation_data = get_input_data_csv("data/twitter_validation.csv", &stop_word_file);
+//     let accuracy = NGram::validate(&bow.ngram_maps, &validation_data);
+//     println!("Accuracy: {}", accuracy);
+// }
 
-fn remove_byte_codes(s: &str) -> String {
-    let reg = Regex::new(r"(\\x[a-f0-9][a-f0-9])").unwrap();
-    reg.replace_all(s, "").to_string()
-}
+// fn remove_byte_codes(s: &str) -> String {
+//     let reg = Regex::new(r"(\\x[a-f0-9][a-f0-9])").unwrap();
+//     reg.replace_all(s, "").to_string()
+// }
 
-fn parse() {
-    let mut file = File::open("data/Task-1 tweets_1000.csv").expect("Creating file object error");
-    let mut file_contents = String::new();
-    file.read_to_string(&mut file_contents).expect("Reading file error");
-    if file_contents.eq("") { panic!("Loading n-gram model: File empty") }
+// fn parse() {
+//     let mut file = File::open("data/Task-1 tweets_1000.csv").expect("Creating file object error");
+//     let mut file_contents = String::new();
+//     file.read_to_string(&mut file_contents).expect("Reading file error");
+//     if file_contents.eq("") { panic!("Loading n-gram model: File empty") }
 
-    let stop_words = get_stop_words("data/stop_words.txt");
-    let input = file_contents
-        .split("\n")
-        .map(|s| remove_byte_codes(s))
-        .map(|s| clean_words(&String::from(s), &stop_words))
-        .collect_vec();
-    NGram::parse("data/bow.dat", input, "data/parsed.csv");
-}
+//     let stop_words = get_stop_words("data/stop_words.txt");
+//     let input = file_contents
+//         .split("\n")
+//         .map(|s| remove_byte_codes(s))
+//         .map(|s| clean_words(&String::from(s), &stop_words))
+//         .collect_vec();
+//     NGram::parse("data/bow.dat", input, "data/parsed.csv");
+// }
 
 fn main() {
-    write();
-    read();
-    parse();
+    let mut mc = MarkovChain::new();
+    mc.states = MarkovChain::train_file("data/wikisent2.txt", "data/stop_words.txt");
+    mc.save("data/mc.dat");
 }

@@ -52,11 +52,17 @@ pub fn multi_thread_process_list<T1, T2, T3> (
 }
 
 pub fn strip_special_characters(input: &String) -> String {
-    let special_characters = "!@#$%^&*()_+-=[]{}\\|;':\",./<>?0123456789";
+    let special_characters = "!@#$%^&*()_+-=[]{}\\|;':\",./<>?0123456789\n\r";
     input
         .to_lowercase()
         .chars()
-        .filter(|c| !special_characters.contains(*c))
+        .map(|c| {
+            if special_characters.contains(c) {
+                ' '
+            } else {
+                c
+            }
+        })
         .collect()
 }
 
@@ -83,8 +89,7 @@ pub fn get_stop_words(file_path: &str) -> Vec<String> {
         .collect_vec()
 }
 
-pub fn get_input_data_csv(csv_file: &str, stop_word_file: &str) -> Vec<InputTup> {
-    let stop_words = get_stop_words(stop_word_file);
+pub fn get_input_data_csv(csv_file: &str) -> Vec<InputTup> {
 
     let file_contents = fs::read_to_string(csv_file)
         .expect("error reading input file");
@@ -106,13 +111,13 @@ pub fn get_input_data_csv(csv_file: &str, stop_word_file: &str) -> Vec<InputTup>
         ret
     };
 
-    multi_thread_process_list(&records, stop_words, 16, f_thread, None)
+    multi_thread_process_list(&records, Vec::new(), 16, f_thread, None)
 }
 
-pub fn get_markov_data(text_file: String, stop_word_file: &String) -> Vec<InputTup> {
+pub fn get_markov_data(text_file_path: &str, stop_word_file: &str) -> Vec<InputTup> {
     let stop_words = get_stop_words(&stop_word_file);
 
-    let file_contents = fs::read_to_string(text_file).expect("error reading input file");
+    let file_contents = fs::read_to_string(text_file_path).expect("error reading input file");
     let cleaned_text = clean_words(&file_contents, &stop_words);
     let mut last_word = "";
     let mut ret: Vec<InputTup> = Vec::new();

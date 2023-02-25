@@ -34,8 +34,10 @@ impl HiddenMarkovModel {
             state_transitions.push((last_state, current_state.to_owned()));
             last_state = current_state;
         }
-        let state_chain = MarkovChain::new(state_transitions);
-        let observation_chain = MarkovChain::new(input.clone());
+        let mut state_chain = MarkovChain::new();
+        state_chain.states = MarkovChain::train(state_transitions);
+        let mut observation_chain = MarkovChain::new();
+        observation_chain.states = MarkovChain::train(input.clone());
         let initial_probabilities_groups = input
             .clone()
             .into_iter()

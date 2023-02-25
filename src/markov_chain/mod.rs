@@ -1,9 +1,11 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fs};
 use std::time::Instant;
 
 use itertools::Itertools;
 
-use crate::util::{InputTup, multi_thread_process_list};
+use crate::util::{InputTup, multi_thread_process_list, get_markov_data};
+
+pub mod file;
 
 pub type StateMap = HashMap<String, HashMap<String, f32>>;
 pub type StateTotals = HashMap<String, HashMap<String, i32>>;
@@ -13,6 +15,10 @@ pub struct MarkovChain {
 }
 
 impl MarkovChain {
+    pub fn new() -> MarkovChain {
+        MarkovChain { states: HashMap::new() }
+    }
+
     fn feed(totals: &mut StateTotals, from_state: &String, to_state: &String) {
         let o_from_map = totals.get(from_state);
         let from_state_c = from_state.clone();
@@ -48,6 +54,11 @@ impl MarkovChain {
             sm.insert(from_state, state_to_map);
         }
         sm
+    }
+
+    pub fn train_file(text_file: &str, stop_word_file: &str) -> StateMap {
+        let input_data = get_markov_data(text_file, stop_word_file);
+        MarkovChain::train(input_data)
     }
 
     pub fn train(input_data: Vec<InputTup>) -> StateMap {
@@ -91,13 +102,16 @@ impl MarkovChain {
                         .sum();
                     (to, total)
                 })
+                .filter(|(wd, _)| !wd.eq(""))
                 .collect_vec();
             
             let mut to_hm: HashMap<String, i32> = HashMap::new();
             for (to, total) in to_list {
                 to_hm.insert(to, total);
             }
-            totals.insert(from, to_hm);
+            if to_hm.clone().into_iter().len() > 0 {
+                totals.insert(from, to_hm);
+            }
         }
         println!("Group: {:?}", start2.elapsed());
 
@@ -105,11 +119,6 @@ impl MarkovChain {
         let states = MarkovChain::calculate_states(totals);
         println!("Calculate: {:?}", start3.elapsed());
         states
-    }
-
-    pub fn new(input_data: Vec<InputTup>) -> MarkovChain {
-        let states = MarkovChain::train(input_data);
-        MarkovChain { states }
     }
 
     pub fn predict(sm: StateMap, state: String) -> String {

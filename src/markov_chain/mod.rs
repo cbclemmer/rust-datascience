@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use itertools::Itertools;
 
-use crate::util::{InputTup, multi_thread_process_list, get_markov_data};
+use crate::util::{InputTup, multi_thread_process_list, get_markov_data, get_word_map};
 
 pub mod file;
 
@@ -56,8 +56,14 @@ impl MarkovChain {
         sm
     }
 
-    pub fn train_file(text_file: &str) -> StateMap {
-        let input_data = get_markov_data(text_file);
+    pub fn train_file(text_file: &str, white_list_file: &str) -> StateMap {
+        println!("Getting input data from file");
+        let word_map = get_word_map(white_list_file);
+        let input_data = get_markov_data(text_file)
+            .into_iter()
+            .filter(|(from, _)| word_map.get(from).is_some())
+            .collect_vec();
+        println!("Training from file data");
         MarkovChain::train(input_data)
     }
 
@@ -103,10 +109,12 @@ impl MarkovChain {
                     (to, total)
                 })
                 .filter(|(wd, _)| !wd.eq(""))
+                .sorted_by(|(_, tot1), (_, tot2)| tot1.cmp(tot2))
+                .rev()
                 .collect_vec();
             
             let mut to_hm: HashMap<String, i32> = HashMap::new();
-            for (to, total) in to_list {
+            for (to, total) in to_list.into_iter().take(100) {
                 to_hm.insert(to, total);
             }
             if to_hm.clone().into_iter().len() > 0 {

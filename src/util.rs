@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::ops::Index;
 use csv::Reader;
 use itertools::Itertools;
@@ -142,4 +143,13 @@ pub fn reduce<VT, RT>(list: &Vec<VT>, initial: &RT, f: fn(&VT, RT) -> RT) -> RT 
         ret_val = f(item, ret_val);
     }
     ret_val
+}
+
+pub fn get_word_map(file_path: &str) -> HashMap<String, bool> {
+    let file = fs::read_to_string(file_path).expect("Error reading word map file");
+    let mut hm = HashMap::new();
+    for line in file.split("\n") {
+        hm.insert(String::from(line), true);
+    }
+    hm
 }

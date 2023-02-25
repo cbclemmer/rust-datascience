@@ -1,6 +1,10 @@
+use std::fs;
 use std::fs::File;
 use std::io::Read;
+use std::io::Write;
+use std::ops::Index;
 
+use csv::Reader;
 use itertools::Itertools;
 
 use lib::markov_chain::MarkovChain;
@@ -57,7 +61,31 @@ use regex::Regex;
 // }
 
 fn main() {
-    let mut mc = MarkovChain::new();
-    mc.states = MarkovChain::train_file("data/wikisent2.txt");
-    mc.save("data/mc.dat");
+    // let mut mc = MarkovChain::new();
+    // mc.states = MarkovChain::train_file("data/wikisent2.txt", "data/popular_words.txt");
+    // mc.save("data/mc.dat");
+    let mc = MarkovChain::load("data/mc.dat");
+    
 }
+
+
+// let in_file = fs::read_to_string("data/unigram_freq.csv").expect("Error reading input");
+// let mut rdr = Reader::from_reader(in_file.as_bytes());
+// let mut out_file = File::create("data/popular_words.txt").expect("Error creating out file");
+// let words = rdr.records()
+//     .map(|r| r.expect("Error parsing record"))
+//     .map(|r| (String::from(r.index(0)), r.index(1).parse::<i64>().unwrap()))
+//     .sorted_by(|(_, n1), (_, n2)| n1.cmp(&n2))
+//     .map(|(wd, _)| format!("{}\n", wd))
+//     .rev()
+//     .take(10000)
+//     .collect_vec();
+
+// let mut i = 0;
+// for wd in words {
+//     if i % 100 == 0 {
+//         println!("Wrote {} lines", i);
+//     }
+//     out_file.write(wd.as_bytes()).expect("Error writing line to file");
+//     i = i + 1;
+// }

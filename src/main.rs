@@ -58,6 +58,6 @@ use regex::Regex;
 
 fn main() {
     let mut mc = MarkovChain::new();
-    mc.states = MarkovChain::train_file("data/wikisent2.txt", "data/stop_words.txt");
+    mc.states = MarkovChain::train_file("data/wikisent2.txt");
     mc.save("data/mc.dat");
 }

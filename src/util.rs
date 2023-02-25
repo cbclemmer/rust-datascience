@@ -89,7 +89,8 @@ pub fn get_stop_words(file_path: &str) -> Vec<String> {
         .collect_vec()
 }
 
-pub fn get_input_data_csv(csv_file: &str) -> Vec<InputTup> {
+pub fn get_input_data_csv(csv_file: &str, stop_word_file: &str) -> Vec<InputTup> {
+    let stop_words = get_stop_words(stop_word_file);
 
     let file_contents = fs::read_to_string(csv_file)
         .expect("error reading input file");
@@ -111,14 +112,13 @@ pub fn get_input_data_csv(csv_file: &str) -> Vec<InputTup> {
         ret
     };
 
-    multi_thread_process_list(&records, Vec::new(), 16, f_thread, None)
+    multi_thread_process_list(&records, stop_words, 16, f_thread, None)
 }
 
-pub fn get_markov_data(text_file_path: &str, stop_word_file: &str) -> Vec<InputTup> {
-    let stop_words = get_stop_words(&stop_word_file);
-
-    let file_contents = fs::read_to_string(text_file_path).expect("error reading input file");
-    let cleaned_text = clean_words(&file_contents, &stop_words);
+pub fn get_markov_data(text_file_path: &str) -> Vec<InputTup> {
+    let err = format!("Error reading input file: {}", text_file_path);
+    let file_contents = fs::read_to_string(text_file_path).expect(&err);
+    let cleaned_text = clean_words(&file_contents, &Vec::new());
     let mut last_word = "";
     let mut ret: Vec<InputTup> = Vec::new();
     for word in cleaned_text.split(" ") {

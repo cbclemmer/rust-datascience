@@ -56,8 +56,8 @@ impl MarkovChain {
         sm
     }
 
-    pub fn train_file(text_file: &str, stop_word_file: &str) -> StateMap {
-        let input_data = get_markov_data(text_file, stop_word_file);
+    pub fn train_file(text_file: &str) -> StateMap {
+        let input_data = get_markov_data(text_file);
         MarkovChain::train(input_data)
     }
 

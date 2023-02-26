@@ -1,4 +1,4 @@
-use std::{fs::File, io::{Write, Read, BufReader, BufRead}};
+use std::{fs::File, io::{Write, BufReader, BufRead}};
 
 use crate::markov_chain::*;
 

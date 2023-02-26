@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use itertools::Itertools;
 
 use crate::markov_chain::MarkovChain;
-use crate::util::InputTup;
+use crate::types::InputTup;
 
 pub struct HiddenMarkovModel {
     pub state_chain: MarkovChain, // State -> State -> Probability

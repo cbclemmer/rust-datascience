@@ -8,13 +8,9 @@ pub mod config;
 pub mod learn;
 pub mod file;
 
-use crate::util::InputTup;
+use crate::types::{NgramBag, NgramMap};
+use crate::types::InputTup;
 use crate::util::{multi_thread_process_list, reduce};
-
-// (total num words, word -> probability)
-// probability = num times word appears / total num words for type
-pub type NgramBag = (usize, HashMap<String, f32>);
-pub type NgramMap = HashMap<String, NgramBag>;
 
 pub struct NGram {
     pub ngram_maps: Vec<NgramMap>,

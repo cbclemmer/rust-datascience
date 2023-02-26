@@ -10,7 +10,7 @@ use itertools::Itertools;
 use lib::markov_chain::MarkovChain;
 use lib::n_gram::NGram;
 use lib::util::clean_words;
-use lib::util::get_stop_words;
+use lib::util::get_validation_map;
 use lib::util::get_input_data_csv;
 use regex::Regex;
 

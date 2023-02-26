@@ -3,7 +3,8 @@ use rand::Rng;
 use std::ops::Index;
 use std::time::Instant;
 
-use crate::util::{InputTup, get_percent, multi_thread_process_list};
+use crate::util::{get_percent, multi_thread_process_list};
+use crate::types::InputTup;
 use crate::n_gram::{NGram, NgramMap};
 use crate::n_gram::config::*;
 

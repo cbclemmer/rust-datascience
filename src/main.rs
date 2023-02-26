@@ -8,6 +8,7 @@ use csv::Reader;
 use itertools::Itertools;
 
 use lib::markov_chain::MarkovChain;
+use lib::word_2_vec::Word2Vec;
 use lib::n_gram::NGram;
 use lib::util::clean_words;
 use lib::util::get_validation_map;
@@ -64,7 +65,9 @@ fn main() {
     // let mut mc = MarkovChain::new();
     // mc.states = MarkovChain::train_file("data/wikisent2.txt", "data/popular_words.txt");
     // mc.save("data/mc.dat");
-    let mc = MarkovChain::load("data/mc.dat");
+    // let mc = MarkovChain::load("data/mc.dat");
+    let mut w2v = Word2Vec::new();
+    w2v.data = Word2Vec::train_file("data/bee_movie.txt", Some("data/stop_words.txt"), Some("data/popular_words.txt"));
     
 }
 

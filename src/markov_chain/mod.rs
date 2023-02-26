@@ -36,10 +36,10 @@ impl MarkovChain {
         println!("Getting input data from file");
         let input_data = get_word_pairs(text_file, None, Some(white_list_file));
         println!("Training from file data");
-        MarkovChain::train(input_data)
+        MarkovChain::train(&input_data)
     }
 
-    pub fn train(input_data: Vec<InputTup>) -> StateMap {
+    pub fn train(input_data: &Vec<InputTup>) -> StateMap {
         let totals = feed_totals_multi(input_data, None);
         MarkovChain::calculate_states(totals)
     }

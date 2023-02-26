@@ -190,7 +190,7 @@ pub fn feed_totals(totals: &StateTotals, from_state: &String, to_state: &String)
     }
 }
 
-pub fn feed_totals_multi(input_data: Vec<InputTup>, initial_data: Option<&StateTotals>) -> StateTotals {
+pub fn feed_totals_multi(input_data: &Vec<InputTup>, initial_data: Option<&StateTotals>) -> StateTotals {
     let mut totals = if initial_data.is_some()
         { initial_data.unwrap().clone() }
         else { StateTotals::new() };
